@@ -1,10 +1,11 @@
+from abc import ABC, abstractmethod
 from typing import List, Tuple
 
 import tensorflow as tf
 import tensorflow_probability as tfp
 tfd = tfp.distributions
 
-class DataGenerator:
+class DataGenerator(ABC):
 
     def __init__(
             self,
@@ -13,6 +14,14 @@ class DataGenerator:
             samples_per_epoch: int,
             batch_size: int,
         ):
+        """Base data generator, which can be used to derive other data generators,
+        such as synthetic generators or real data generators.
+
+        Arguments:
+            seed: Random seed for generator.
+            samples_per_epoch: Number of samples per epoch.
+            batch_size: Batch size.
+        """
 
         # Set random seed for generator
         self.seed = seed
@@ -26,47 +35,54 @@ class DataGenerator:
         self.i = 0
 
     def __iter__(self):
+        """Reset epoch counter and return self."""
+        self.i = 0
         return self
 
-    def __next__(self):
+    def __next__(self) -> Tuple[tf.Tensor, tf.Tensor, tf.Tensor, tf.Tensor]:
+        """Generate next batch of data, using the `generate_batch` method.
+        The `generate_batch` method should be implemented by the derived class.
+        """
         
         if self.i >= self.num_batches:
-            self.i = 0
             raise StopIteration
         
         else:
             self.i += 1
-            self.state, batch = self.generate_batch(state=self.state)
+            self.seed, batch = self.generate_batch(seed=self.seed)
             return batch
 
     def generate_batch(
             self,
-            state: tf.Tensor,
+            seed: tf.Tensor,
+        ) -> Tuple[tf.Tensor, Tuple[tf.Tensor, tf.Tensor, tf.Tensor, tf.Tensor]]:
+        """Generate batch of data using the random seed `seed`.
+
+        Arguments:
+            seed: Random seed for batch.
+        
+        Returns:
+            seed: Random seed for next batch.
+            batch: Tuple of tensors containing the context and target data.
+        """
+
+        # Create full batch with context and target data not yet split
+        seed, batch_ctx_trg = self.generate_full_batch(seed=seed)
+
+        return self.split_to_context_and_target(seed=seed, batch_ctx_trg=batch_ctx_trg)
+
+    @abstractmethod
+    def generate_full_batch(
+            self,
+            seed: tf.Tensor,
         ) -> Tuple[tf.Tensor, Tuple[tf.Tensor, tf.Tensor]]:
-
-        self.self, (num_ctx, num_trg) = self.draw_nums_context_and_target(
-            state=state,
-        )
-
-        self.state, context_target_batch = self.generate_context_target_batch(
-            state=state,
-            num_ctx=num_ctx,
-            num_trg=num_trg,
-        )
-
         raise NotImplementedError
 
-    def generate_context_target_batch(
+    @abstractmethod
+    def split_to_context_and_target(
             self,
-            state: tf.Tensor,
-            num_ctx: int,
-            num_trg: int,
-        ) -> Tuple[tf.Tensor, Tuple[tf.Tensor, tf.Tensor]]:
-        raise NotImplementedError
-
-    def draw_nums_context_and_target(
-            self,
-            state: tf.Tensor,
+            seed: tf.Tensor,
+            batch_ctx_trg: Tuple[tf.Tensor, tf.Tensor],
         ) -> Tuple[tf.Tensor, Tuple[tf.Tensor, tf.Tensor]]:
         raise NotImplementedError
 
@@ -84,7 +100,8 @@ class SyntheticGenerator(DataGenerator):
     ):
 
         super().__init__(**kwargs)
-
+        
+        # Set synthetic generator parameters
         self.min_num_trg = min_num_trg
         self.max_num_trg = max_num_trg
         self.context_range = context_range
