@@ -1,14 +1,14 @@
 from typing import Tuple
 import tensorflow as tf
 
-Seed = Tuple[int, int]
+from dpconvcnp.types import Seed
+from dpconvcnp.utils import f32, f64, to_tensor
 
 def randint(
     shape: tf.TensorShape,
     seed: tf.Tensor,
-    minval: int,
-    maxval: int,
-    dtype: tf.DType = tf.int32,
+    minval: tf.Tensor,
+    maxval: tf.Tensor,
 ) -> Tuple[Seed, tf.Tensor]:
     """Generate random integers in the range `[minval, maxval]`,
     uniformly distributed, and propagate a new random seed.
@@ -25,23 +25,23 @@ def randint(
         rand: Random integers in the range `[minval, maxval]`.
     """
 
-    assert dtype in [tf.int32, tf.int64], f"Invalid dtype: {dtype}"
+    assert minval.dtype == maxval.dtype, "minval and maxval must have the same dtype"
+    assert minval.dtype in [tf.int32, tf.int64], f"Invalid dtype: {minval.dtype=}"
 
     seed, next_seed = tf.random.split(seed, num=2)
     return next_seed, tf.random.stateless_uniform(
         shape=shape,
         seed=seed,
         minval=minval,
-        maxval=maxval,
-        dtype=dtype,
+        maxval=maxval+1,
+        dtype=minval.dtype,
     )
 
 def randu(
     shape: tf.TensorShape,
     seed: tf.Tensor,
-    minval: float,
-    maxval: float,
-    dtype: tf.DType = tf.float32,
+    minval: tf.Tensor,
+    maxval: tf.Tensor,
 ) -> Tuple[Seed, tf.Tensor]:
     """Generate random uniforms in the range `[minval, maxval]`,
     uniformly distributed, and propagate a new random seed.
@@ -58,22 +58,23 @@ def randu(
         rand: Random uniforms in the range `[minval, maxval]`.
     """
 
-    assert dtype in [tf.int32, tf.int64], f"Invalid dtype: {dtype}"
+    assert minval.dtype == maxval.dtype, "minval and maxval must have the same dtype"
+    assert minval.dtype in [tf.float32, tf.float64], f"Invalid dtype: {minval.dtype=}"
+    
     seed, next_seed = tf.random.split(seed, num=2)
     return next_seed, tf.random.stateless_uniform(
         shape=shape,
         seed=seed,
         minval=minval,
         maxval=maxval,
-        dtype=dtype,
+        dtype=minval.dtype,
     )
 
 def randn(
     shape: tf.TensorShape,
     seed: tf.Tensor,
-    mean: float,
-    stddev: float,
-    dtype: tf.DType = tf.float32,
+    mean: tf.Tensor,
+    stddev: tf.Tensor,
 ) -> Tuple[Seed, tf.Tensor]:
     """Generate random normals with mean `mean` and standard deviation `stddev`,
     and propagate a new random seed.
@@ -90,22 +91,23 @@ def randn(
         rand: Random normals with mean `loc` and standard deviation `scale`.
     """
 
-    assert dtype in [tf.float32, tf.float64], f"Invalid dtype: {dtype}"
+    assert mean.dtype == stddev.dtype, "mean and stddev must have the same dtype"
+    assert mean.dtype in [tf.float32, tf.float64], f"Invalid dtype: {mean.dtype=}"
     
     seed, next_seed = tf.random.split(seed, num=2)
+
     return next_seed, tf.random.stateless_normal(
         shape=shape,
         seed=seed,
         mean=mean,
         stddev=stddev,
-        dtype=dtype,
+        dtype=mean.dtype,
     )
 
 def mvn(
     seed: tf.Tensor,
-    mean: float,
-    cov: float,
-    dtype: tf.DType = tf.float32,
+    mean: tf.Tensor,
+    cov: tf.Tensor,
 ) -> Tuple[Seed, tf.Tensor]:
     """Generate random multivariate normals with mean `mean` and covariance `cov`,
     and propagate a new random seed.
@@ -121,7 +123,8 @@ def mvn(
         rand: Random multivariate normals with mean `loc` and covariance `scale`.
     """
 
-    assert dtype in [tf.float32, tf.float64], f"Invalid dtype: {dtype}"
+    assert mean.dtype == cov.dtype, "mean and cov must have the same dtype"
+    assert mean.dtype in [tf.float32, tf.float64], f"Invalid dtype: {mean.dtype=}"
 
     # Split seed
     seed, next_seed = tf.random.split(seed, num=2)
@@ -130,9 +133,8 @@ def mvn(
     seed, rand = randn(
         shape=mean.shape,
         seed=seed,
-        mean=0.0,
-        stddev=1.0,
-        dtype=dtype,
+        mean=to_tensor(0.0, mean.dtype),
+        stddev=to_tensor(1.0, mean.dtype),
     )
 
     # Compute multiply noise by Cholesky factor and add mean
@@ -146,8 +148,7 @@ def mvn(
 
 def zero_mean_mvn(
     seed: tf.Tensor,
-    cov: float,
-    dtype: tf.DType = tf.float32,
+    cov: tf.Tensor,
 ) -> Tuple[Seed, tf.Tensor]:
     """Generate random multivariate normals with mean zero and covariance `cov`,
     and propagate a new random seed.
@@ -163,11 +164,6 @@ def zero_mean_mvn(
     """
 
     # Create mean of zeroes
-    mean = tf.zeros(shape=cov.shape[:-1], dtype=dtype)
+    mean = tf.zeros(shape=cov.shape[:-1], dtype=cov.dtype)
 
-    return mvn(
-        seed=seed,
-        mean=mean,
-        cov=cov,
-        dtype=dtype,
-    )
+    return mvn(seed=seed, mean=mean, cov=cov)

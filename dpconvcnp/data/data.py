@@ -1,13 +1,14 @@
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
-from typing import Tuple, Optional, Dict
+from typing import Tuple, Optional
 
 import tensorflow as tf
-import gpflow
 
-from dpconvcnp.random import randint, randu, zero_mean_mvn
+from dpconvcnp.random import randint, randu
+from dpconvcnp.utils import f32, i32, to_tensor
 
 Seed = tf.Tensor
+
 
 @dataclass
 class Batch:
@@ -23,7 +24,6 @@ class Batch:
     epsilon: Optional[tf.Tensor] = None
     delta: Optional[tf.Tensor] = None
 
-
 class DataGenerator(ABC):
 
     def __init__(
@@ -32,8 +32,10 @@ class DataGenerator(ABC):
             seed: Seed,
             samples_per_epoch: int,
             batch_size: int,
-            epsilon_range: tf.Tensor,
-            log10_delta_range: tf.Tensor,
+            min_epsilon: float,
+            max_epsilon: float,
+            min_log10_delta: float,
+            max_log10_delta: float,
         ):
         """Base data generator, which can be used to derive other data generators,
         such as synthetic generators or real data generators.
@@ -42,6 +44,10 @@ class DataGenerator(ABC):
             seed: Random seed for generator.
             samples_per_epoch: Number of samples per epoch.
             batch_size: Batch size.
+            min_epsilon: Minimum DP epsilon.
+            max_epsilon: Maximum DP epsilon.
+            min_log10_delta: Minimum log10 DP delta.
+            max_log10_delta: Maximum log10 DP delta.
         """
 
         # Set random seed for generator
@@ -53,8 +59,8 @@ class DataGenerator(ABC):
         self.batch_size = batch_size
 
         # Set DP parameters
-        self.epsilon_range = epsilon_range
-        self.log10_delta_range = log10_delta_range
+        self.epsilon_range = to_tensor([min_epsilon, max_epsilon], f32)
+        self.log10_delta_range = to_tensor([min_log10_delta, max_log10_delta], f32)
 
         # Set epoch counter
         self.i = 0
@@ -140,11 +146,13 @@ class DataGenerator(ABC):
         return seed, epsilon, delta
 
 
-class SyntheticGenerator(DataGenerator):
+class SyntheticGenerator(DataGenerator, ABC):
     
     def __init__(
         self,
         *,
+        min_num_ctx: int,
+        max_num_ctx: int,
         min_num_trg: int,
         max_num_trg: int,
         context_range: tf.Tensor,
@@ -155,10 +163,13 @@ class SyntheticGenerator(DataGenerator):
         super().__init__(**kwargs)
         
         # Set synthetic generator parameters
-        self.min_num_trg = min_num_trg
-        self.max_num_trg = max_num_trg
-        self.context_range = context_range
-        self.target_range = target_range
+        self.min_num_ctx = to_tensor(min_num_ctx, i32)
+        self.max_num_ctx = to_tensor(max_num_ctx, i32)
+        self.min_num_trg = to_tensor(min_num_trg, i32)
+        self.max_num_trg = to_tensor(max_num_trg, i32)
+
+        self.context_range = to_tensor(context_range, f32)
+        self.target_range = to_tensor(target_range, f32)
 
     def generate_data(self, seed: Seed) -> Tuple[Seed, Batch]:
         """Generate batch of data using the random seed `seed`.
@@ -204,8 +215,8 @@ class SyntheticGenerator(DataGenerator):
         seed, num_ctx = randint(
             shape=(),
             seed=seed,
-            minval=self.context_range[0],
-            maxval=self.context_range[1],
+            minval=self.min_num_ctx,
+            maxval=self.max_num_ctx,
         )
 
         # Sample number of target points
@@ -244,15 +255,15 @@ class SyntheticGenerator(DataGenerator):
         seed, x_ctx = randu(
             shape=(self.batch_size, num_ctx, self.dim),
             seed=seed,
-            minval=self.context_range[0, :],
-            maxval=self.context_range[1, :],
+            minval=self.context_range[:, 0],
+            maxval=self.context_range[:, 1],
         )
 
         seed, x_trg = randu(
             shape=(self.batch_size, num_trg, self.dim),
             seed=seed,
-            minval=self.target_range[0, :],
-            maxval=self.target_range[1, :],
+            minval=self.target_range[:, 0],
+            maxval=self.target_range[:, 1],
         )
 
         return seed, tf.concat([x_ctx, x_trg], axis=1)
@@ -272,121 +283,3 @@ class SyntheticGenerator(DataGenerator):
                 the context and target outputs.
         """
         pass
-
-
-class GPGenerator(SyntheticGenerator):
-    
-    def __init__(
-        self,
-        *,
-        dim: int,
-        noise_std: float,
-        kernel_kwargs: Dict[str, float],
-        **kwargs,
-    ):
-        super().__init__(**kwargs)
-
-        self.dim = dim
-        self.noise_std = noise_std
-        self.kernel_kwargs = kernel_kwargs
-
-    def sample_outputs(self, seed: Seed, x: tf.Tensor) -> Tuple[Seed, tf.Tensor]:
-        """Sample context and target outputs, given the inputs `x`.
-        
-        Arguments:
-            seed: Random seed.
-            x: Tensor of shape (batch_size, num_ctx + num_trg, dim) containing
-                the context and target inputs.
-
-        Returns:
-            seed: Random seed generated by splitting.
-            y: Tensor of shape (batch_size, num_ctx + num_trg, 1) containing
-                the context and target outputs.
-        """
-
-        # Set up GP kernel
-        seed, kernel = self.set_up_kernel(seed=seed)
-
-        # Set up covariance at input locations
-        kxx = kernel(x) + gpflow.kernels.White(self.noise_std**2.)
-
-        # Sample from GP with zero mean and covariance kxx
-        seed, y = zero_mean_mvn(
-            seed=seed,
-            cov=kxx,
-            dtype=self.dtype
-        )
-
-        return seed, y
-
-    @abstractmethod
-    def set_up_kernel(self, seed: Seed) -> Tuple[Seed, gpflow.kernels.Kernel]:
-        """Set up GP kernel.
-        
-        Arguments:
-            seed: Random seed.
-
-        Returns:
-            seed: Random seed generated by splitting.
-            kernel: GP kernel.
-        """
-        pass
-
-
-class RandomScaleGPGenerator(GPGenerator):
-
-    noisy_mixture_long_lengthscale: float = 1.
-    weakly_periodic_period: float = 0.25
-
-    def __init__(
-        self,
-        *,
-        kernel_type: str,
-        min_log10_lengthscale: float,
-        max_log10_lengthscale: float,
-        **kwargs,
-    ):
-        super().__init__(**kwargs)
-
-        self.kernel_type = kernel_type
-        self.min_log10_lengthscale = min_log10_lengthscale
-        self.max_log10_lengthscale = max_log10_lengthscale
-
-    def set_up_kernel(self, seed: Seed) -> Tuple[Seed, gpflow.kernels.Kernel]:
-
-        # Sample lengthscale
-        seed, log10_lengthscale = randu(
-            shape=(),
-            seed=seed,
-            minval=self.min_log10_lengthscale,
-            maxval=self.max_log10_lengthscale,
-        )
-        lengthscale = tf.pow(10.0, log10_lengthscale)
-        
-        if self.kernel_type == "eq":
-            kernel = gpflow.kernels.SquaredExponential(lengthscales=lengthscale)
-        
-        elif self.kernel_type == "matern12":
-            kernel = gpflow.kernels.Matern12(lengthscales=lengthscale)
-
-        elif self.kernel_type == "matern32":
-            kernel = gpflow.kernels.Matern32(lengthscales=lengthscale)
-
-        elif self.kernel_type == "matern52":
-            kernel = gpflow.kernels.Matern52(lengthscales=lengthscale)
-
-        elif self.kernel_type == "noisy_mixture":
-            kernel = gpflow.kernels.SquaredExponential(
-                lengthscales=lengthscale,
-            ) + gpflow.kernels.SquaredExponential(
-                lengthscales=self.noisy_mixture_long_lengthscale,
-            )
-
-        elif self.kernel_type == "weakly_periodic":
-            kernel = gpflow.kernels.SquaredExponential(
-                lengthscales=lengthscale,
-            ) * gpflow.kernels.Periodic(
-                period=self.weakly_periodic_period,
-            )
-
-        return seed, kernel
