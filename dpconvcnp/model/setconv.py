@@ -3,7 +3,13 @@ from typing import Tuple
 import tensorflow as tf
 from check_shape import check_shape
 
-# TODO: implement SetConv Decoder
+from dpconvcnp.random import zero_mean_mvn_chol
+from dpconvcnp.types import Seed
+from dpconvcnp.utils import f64, cast
+from dpconvcnp.model.privacy_accounting import (
+    sens_per_sigma as dp_sens_per_sigma
+)
+
 
 class DPSetConvEncoder(tf.Module):
 
@@ -30,13 +36,13 @@ class DPSetConvEncoder(tf.Module):
             dtype=dtype,
         )
 
-        self.y_bound = tf.Variable(
+        self.log_y_bound = tf.Variable(
             initial_value=y_bound_init,
             trainable=y_bound_trainable,
             dtype=dtype,
         )
 
-        self.y_bound = tf.Variable(
+        self.logit_w_noise = tf.Variable(
             initial_value=w_noise_init,
             trainable=w_noise_trainable,
             dtype=dtype,
@@ -46,25 +52,40 @@ class DPSetConvEncoder(tf.Module):
     def lengthscale(self) -> tf.Tensor:
         return tf.exp(self.log_lengthscale)
 
+    @property
+    def y_bound(self) -> tf.Tensor:
+        return tf.exp(self.log_y_bound) + 1e-2
+    
+    @property
+    def w_noise(self) -> tf.Tensor:
+        return (1 - 2e-2) * tf.nn.sigmoid(self.logit_w_noise) + 1e-2
+    
+    def data_sigma(self, sens_per_sigma: tf.Tensor) -> tf.Tensor:
+        return 2.0 * self.y_bound / (sens_per_sigma * self.w_noise ** 0.5)
+
+    def density_sigma(self, sens_per_sigma: tf.Tensor) -> tf.Tensor:
+        return 2**0.5 / (sens_per_sigma * (1 - self.w_noise) ** 0.5)
+
     def call(
             self,
+            seed: Seed,
             x_ctx: tf.Tensor,
             y_ctx: tf.Tensor,
             x_trg: tf.Tensor,
+            epsilon: tf.Tensor,
+            delta: tf.Tensor,
         ) -> Tuple[tf.Tensor, tf.Tensor]:
         
         # Check context shapes
         check_shape(
             [x_ctx, y_ctx, x_trg],
-            [("B", "C", "Dx"), ("B", "C", "Dy"), ("B", "T", "Dx")],
+            [("B", "C", "Dx"), ("B", "C", 1), ("B", "T", "Dx")],
         )
 
-        # Clip context outputs
-        y_ctx = self.clip_y(y_ctx)
-
-        # Concatenate tensor of ones to the context outputs
+        # Clip context outputs and concatenate tensor of ones
+        y_ctx = self.clip_y(y_ctx)  # shape (batch_size, num_ctx, 1)
         y_ctx = tf.concat(
-            [y_ctx, tf.ones_like(y_ctx[..., :1])],
+            [y_ctx, tf.ones_like(y_ctx)],
             axis=-1,
         )  # shape (batch_size, num_ctx, Dy+1)
 
@@ -73,11 +94,10 @@ class DPSetConvEncoder(tf.Module):
             x=tf.concat([x_ctx, x_trg], axis=1),
             points_per_unit=self.points_per_unit,
         )  # shape (batch_size, n1, ..., ndim, Dx)
-
-        x_grid = flatten_grid(x_grid)  # shape (batch_size, num_grid_points, Dx
+        x_grid = flatten_grid(x_grid)  # shape (batch_size, num_grid_points, Dx)
 
         # Compute matrix of weights between context points and grid points
-        weights = compute_setconv_weights(
+        weights = compute_eq_weights(
             x1=x_grid,
             x2=x_ctx,
             lengthscale=self.w_noise,
@@ -87,11 +107,22 @@ class DPSetConvEncoder(tf.Module):
         y_grid = tf.matmul(
             weights,
             y_ctx,
-        )  # shape (batch_size, num_grid_points, Dy+1)
+        )  # shape (batch_size, num_grid_points, 2)
 
-        # TODO: add noise to y_grid
+        # Sample noise and add it to the data and density channels
+        seed, noise = self.sample_noise(
+            seed=seed,
+            x_grid=x_grid,
+            epsilon=epsilon,
+            delta=delta,
+        )
+        
+        check_shape(
+            [y_grid, noise],
+            [("B", "G", 2), ("B", "G", 2)],
+        )
 
-        return x_grid, y_grid
+        return x_grid, y_grid + noise
 
 
     def clip_y(self, y_ctx: tf.Tensor) -> tf.Tensor:
@@ -109,8 +140,65 @@ class DPSetConvEncoder(tf.Module):
         return tf.clip_by_value(y_ctx, -self.y_bound, self.y_bound)
 
 
-    def sample_noise(self, shape: tf.TensorShape) -> tf.Tensor:
-        raise NotImplementedError
+    def sample_noise(
+            self,
+            seed: Seed,
+            x_grid: tf.Tensor,
+            epsilon: tf.Tensor,
+            delta: tf.Tensor,
+        ) -> tf.Tensor:
+        """Sample noise for the density and data channels.
+
+        Arguments:
+            x_grid: Tensor of shape (batch_size, num_grid_points, Dx)
+            epsilon: DP epsilon parameter
+            delta: DP delta parameter
+
+        Returns:
+            Tensor of shape (batch_size, num_grid_points, 2)
+        """
+
+        # Convert everything to float64 for numerical accuracy
+        x_grid = cast(x_grid, dtype=f64)
+        epsilon = cast(epsilon, dtype=f64)
+        delta = cast(delta, dtype=f64)
+
+        # Compute noise GP covariance and its cholesky
+        kxx = compute_eq_weights(
+            x1=x_grid,
+            x2=x_grid,
+            lengthscale=self.lengthscale,
+        )
+        kxx_chol = tf.linalg.cholesky(
+            kxx + tf.eye(kxx.shape[-1], dtype=kxx.dtype) * 1e-6
+        )
+
+        # Draw noise samples for the density and data channels
+        seed, data_noise = zero_mean_mvn_chol(
+            seed=seed,
+            cov_chol=kxx_chol,
+        )  # shape (batch_size, num_grid_points,)
+
+        seed, density_noise = zero_mean_mvn_chol(
+            seed=seed,
+            cov_chol=kxx_chol,
+        )  # shape (batch_size, num_grid_points,) 
+
+        # Compute sensitivity per sigma
+        sens_per_sigma = dp_sens_per_sigma(epsilon=epsilon, delta=delta)
+
+        # Multiply noise by standard deviations
+        data_noise = data_noise * self.data_sigma(
+            sens_per_sigma=sens_per_sigma,
+        )
+        density_noise = density_noise * self.density_sigma(
+            sens_per_sigma=sens_per_sigma,
+        )
+
+        return seed, tf.stack(
+            [data_noise, density_noise],
+            axis=-1,
+        )  # shape (batch_size, num_grid_points, 2)
 
 
 class SetConvDecoder(tf.Module):
@@ -127,7 +215,12 @@ class SetConvDecoder(tf.Module):
     def lengthscale(self) -> tf.Tensor:
         return tf.exp(self.log_lengthscale)
     
-    def call(self, x_grid: tf.Tensor, z_grid: tf.Tensor, x_trg: tf.Tensor) -> tf.Tensor:
+    def call(
+            self,
+            x_grid: tf.Tensor,
+            z_grid: tf.Tensor,
+            x_trg: tf.Tensor,
+        ) -> tf.Tensor:
         """Apply EQ kernel smoothing to the grid points,
         to interpolate to the target points.
 
@@ -145,7 +238,7 @@ class SetConvDecoder(tf.Module):
         z_grid = flatten_grid(z_grid)  # shape (batch_size, num_grid_points, Dz)
 
         # Compute weights
-        weights = compute_setconv_weights(
+        weights = compute_eq_weights(
             x1=x_trg,
             x2=x_grid,
             lengthscale=self.lengthscale,
@@ -210,7 +303,8 @@ def make_discretisation_grid(
 
 
 def flatten_grid(grid: tf.Tensor) -> tf.Tensor:
-    """Flatten the grid tensor to a tensor of shape (batch_size, num_grid_points, dim).
+    """Flatten the grid tensor to a tensor of shape
+    (batch_size, num_grid_points, dim).
 
     Arguments:
         grid: Tensor of shape (batch_size, n1, n2, ..., ndim, dim)
@@ -222,7 +316,7 @@ def flatten_grid(grid: tf.Tensor) -> tf.Tensor:
     return tf.reshape(grid, shape=(grid.shape[0], -1, grid.shape[-1]))
 
 
-def compute_setconv_weights(
+def compute_eq_weights(
         x1: tf.Tensor,
         x2: tf.Tensor,
         lengthscale: tf.Tensor,

@@ -4,6 +4,7 @@ import tensorflow as tf
 from dpconvcnp.types import Seed
 from dpconvcnp.utils import f32, f64, to_tensor
 
+
 def randint(
     shape: tf.TensorShape,
     seed: tf.Tensor,
@@ -37,6 +38,7 @@ def randint(
         dtype=minval.dtype,
     )
 
+
 def randu(
     shape: tf.TensorShape,
     seed: tf.Tensor,
@@ -69,6 +71,7 @@ def randu(
         maxval=maxval,
         dtype=minval.dtype,
     )
+
 
 def randn(
     shape: tf.TensorShape,
@@ -104,6 +107,7 @@ def randn(
         dtype=mean.dtype,
     )
 
+
 def mvn(
     seed: tf.Tensor,
     mean: tf.Tensor,
@@ -114,8 +118,8 @@ def mvn(
 
     Arguments:
         seed: Random seed for random number generator.
-        mean: Mean of the multivariate normal distribution.
-        cov: Covariance of the multivariate normal distribution.
+        mean: Mean of the multivariate normal.
+        cov: Covariance of the multivariate normal.
         dtype: Data type of the output tensor.
 
     Returns:
@@ -123,7 +127,33 @@ def mvn(
         rand: Random multivariate normals with mean `loc` and covariance `scale`.
     """
 
-    assert mean.dtype == cov.dtype, "mean and cov must have the same dtype"
+    return mvn_chol(
+        seed=seed,
+        mean=mean,
+        cov_chol=tf.linalg.cholesky(cov),
+    )
+
+
+def mvn_chol(
+    seed: tf.Tensor,
+    mean: tf.Tensor,
+    cov_chol: tf.Tensor,
+) -> Tuple[Seed, tf.Tensor]:
+    """Generate random multivariate normals with mean `mean` and cholesky
+    factor `cov_chol`, and propagate a new random seed.
+
+    Arguments:
+        seed: Random seed for random number generator.
+        mean: Mean of the multivariate normal.
+        cov_chol: Cholesky of the covariance of the multivariate.
+        dtype: Data type of the output tensor.
+
+    Returns:
+        seed: New random seed produced by splitting.
+        rand: Random multivariate normals with mean `loc` and covariance `scale`.
+    """
+
+    assert mean.dtype == cov_chol.dtype, "mean and chol must have the same dtype"
     assert mean.dtype in [tf.float32, tf.float64], f"Invalid dtype: {mean.dtype=}"
 
     # Split seed
@@ -140,11 +170,12 @@ def mvn(
     # Compute multiply noise by Cholesky factor and add mean
     samples = mean + tf.einsum(
         "...ij, ...j -> ...i",
-        tf.linalg.cholesky(cov),
+        cov_chol,
         rand,
     )
 
     return next_seed, samples
+
 
 def zero_mean_mvn(
     seed: tf.Tensor,
@@ -155,7 +186,7 @@ def zero_mean_mvn(
 
     Arguments:
         seed: Random seed for random number generator.
-        cov: Covariance of the multivariate normal distribution.
+        cov: Covariance of the multivariate normal.
         dtype: Data type of the output tensor.
 
     Returns:
@@ -166,4 +197,25 @@ def zero_mean_mvn(
     # Create mean of zeroes
     mean = tf.zeros(shape=cov.shape[:-1], dtype=cov.dtype)
 
-    return mvn(seed=seed, mean=mean, cov=cov)
+    return zero_mean_mvn_chol(seed=seed, mean=mean, cov_chol=tf.linalg.cholesky(cov))
+
+
+def zero_mean_mvn_chol(
+    seed: tf.Tensor,
+    cov_chol: tf.Tensor,
+) -> Tuple[Seed, tf.Tensor]:
+    """
+    Arguments:
+        seed: Random seed for random number generator.
+        cov_chol: Choleksy of the covariance of the multivariate normal.
+        dtype: Data type of the output tensor.
+
+    Returns:
+        seed: New random seed produced by splitting.
+        rand: Random multivariate normals with mean `loc` and covariance `scale`.
+    """
+
+    # Create mean of zeroes
+    mean = tf.zeros(shape=cov_chol.shape[:-1], dtype=cov_chol.dtype)
+
+    return mvn_chol(seed=seed, mean=mean, cov_chol=cov_chol)
