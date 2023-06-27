@@ -1,9 +1,9 @@
-from typing import Tuple
+from typing import Tuple, Union
 import tensorflow as tf
 
-from dpconvcnp.types import Seed
-from dpconvcnp.utils import f32, f64, to_tensor
+from dpconvcnp.utils import to_tensor
 
+Seed = Union[tf.Tensor, Tuple[tf.Tensor], Tuple[int]]
 
 def randint(
     shape: tf.TensorShape,
@@ -197,7 +197,7 @@ def zero_mean_mvn(
     # Create mean of zeroes
     mean = tf.zeros(shape=cov.shape[:-1], dtype=cov.dtype)
 
-    return zero_mean_mvn_chol(seed=seed, mean=mean, cov_chol=tf.linalg.cholesky(cov))
+    return zero_mean_mvn_chol(seed=seed, cov_chol=tf.linalg.cholesky(cov))
 
 
 def zero_mean_mvn_chol(

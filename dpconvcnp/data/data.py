@@ -4,10 +4,8 @@ from typing import Tuple, Optional
 
 import tensorflow as tf
 
-from dpconvcnp.random import randint, randu
+from dpconvcnp.random import Seed, randint, randu
 from dpconvcnp.utils import f32, i32, to_tensor
-
-Seed = tf.Tensor
 
 
 @dataclass

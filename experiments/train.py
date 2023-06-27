@@ -32,6 +32,7 @@ parser.add_argument(
         "noisy_mixture",
         "weakly_periodic",
     ],
+    default=None,
 )
 
 parser.add_argument(

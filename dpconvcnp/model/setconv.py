@@ -4,7 +4,7 @@ import tensorflow as tf
 from check_shape import check_shape
 
 from dpconvcnp.random import zero_mean_mvn_chol
-from dpconvcnp.types import Seed
+from dpconvcnp.random import Seed
 from dpconvcnp.utils import f64, cast
 from dpconvcnp.model.privacy_accounting import (
     sens_per_sigma as dp_sens_per_sigma
@@ -20,6 +20,7 @@ class DPSetConvEncoder(tf.Module):
         lenghtscale_init: float,
         y_bound_init: float,
         w_noise_init: float,
+        lengthscale_trainable: bool = True,
         y_bound_trainable: bool = True,
         w_noise_trainable: bool = True,
         dtype: tf.DType = tf.float32,
@@ -32,7 +33,7 @@ class DPSetConvEncoder(tf.Module):
 
         self.log_lengthscale = tf.Variable(
             initial_value=tf.math.log(lenghtscale_init),
-            trainable=True,
+            trainable=lengthscale_trainable,
             dtype=dtype,
         )
 
@@ -74,7 +75,7 @@ class DPSetConvEncoder(tf.Module):
             x_trg: tf.Tensor,
             epsilon: tf.Tensor,
             delta: tf.Tensor,
-        ) -> Tuple[tf.Tensor, tf.Tensor]:
+        ) -> Tuple[Seed, tf.Tensor, tf.Tensor]:
         
         # Check context shapes
         check_shape(
@@ -122,7 +123,7 @@ class DPSetConvEncoder(tf.Module):
             [("B", "G", 2), ("B", "G", 2)],
         )
 
-        return x_grid, y_grid + noise
+        return seed, x_grid, y_grid + noise
 
 
     def clip_y(self, y_ctx: tf.Tensor) -> tf.Tensor:

@@ -6,7 +6,7 @@ import gpflow
 
 from dpconvcnp.data.data import SyntheticGenerator
 from dpconvcnp.random import randu, zero_mean_mvn
-from dpconvcnp.types import Seed
+from dpconvcnp.random import Seed
 from dpconvcnp.utils import f32, f64, to_tensor, cast
 
 
