@@ -20,6 +20,7 @@ class DPSetConvEncoder(tf.Module):
         lenghtscale_init: float,
         y_bound_init: float,
         w_noise_init: float,
+        margin: float,
         lengthscale_trainable: bool = True,
         y_bound_trainable: bool = True,
         w_noise_trainable: bool = True,
@@ -49,6 +50,8 @@ class DPSetConvEncoder(tf.Module):
             dtype=dtype,
         )
 
+        self.margin = margin
+
     @property
     def lengthscale(self) -> tf.Tensor:
         return tf.exp(self.log_lengthscale)
@@ -67,7 +70,7 @@ class DPSetConvEncoder(tf.Module):
     def density_sigma(self, sens_per_sigma: tf.Tensor) -> tf.Tensor:
         return 2**0.5 / (sens_per_sigma * (1 - self.w_noise) ** 0.5)
 
-    def call(
+    def __call__(
             self,
             seed: Seed,
             x_ctx: tf.Tensor,
@@ -94,6 +97,7 @@ class DPSetConvEncoder(tf.Module):
         x_grid = make_discretisation_grid(
             x=tf.concat([x_ctx, x_trg], axis=1),
             points_per_unit=self.points_per_unit,
+            margin=self.margin,
         )  # shape (batch_size, n1, ..., ndim, Dx)
         x_grid = flatten_grid(x_grid)  # shape (batch_size, num_grid_points, Dx)
 
@@ -159,6 +163,9 @@ class DPSetConvEncoder(tf.Module):
             Tensor of shape (batch_size, num_grid_points, 2)
         """
 
+        # Save input data type
+        in_dtype = x_grid.dtype
+
         # Convert everything to float64 for numerical accuracy
         x_grid = cast(x_grid, dtype=f64)
         epsilon = cast(epsilon, dtype=f64)
@@ -168,7 +175,7 @@ class DPSetConvEncoder(tf.Module):
         kxx = compute_eq_weights(
             x1=x_grid,
             x2=x_grid,
-            lengthscale=self.lengthscale,
+            lengthscale=cast(self.lengthscale, dtype=f64),
         )
         kxx_chol = tf.linalg.cholesky(
             kxx + tf.eye(kxx.shape[-1], dtype=kxx.dtype) * 1e-6
@@ -188,13 +195,19 @@ class DPSetConvEncoder(tf.Module):
         # Compute sensitivity per sigma
         sens_per_sigma = dp_sens_per_sigma(epsilon=epsilon, delta=delta)
 
+        # Convert back to input data types
+        data_noise = cast(data_noise, dtype=in_dtype)
+        density_noise = cast(density_noise, dtype=in_dtype)
+        sens_per_sigma = cast(sens_per_sigma, dtype=in_dtype)
+
         # Multiply noise by standard deviations
         data_noise = data_noise * self.data_sigma(
             sens_per_sigma=sens_per_sigma,
-        )
+        )[:, None]
+
         density_noise = density_noise * self.density_sigma(
             sens_per_sigma=sens_per_sigma,
-        )
+        )[:, None]
 
         return seed, tf.stack(
             [data_noise, density_noise],
@@ -216,7 +229,7 @@ class SetConvDecoder(tf.Module):
     def lengthscale(self) -> tf.Tensor:
         return tf.exp(self.log_lengthscale)
     
-    def call(
+    def __call__(
             self,
             x_grid: tf.Tensor,
             z_grid: tf.Tensor,

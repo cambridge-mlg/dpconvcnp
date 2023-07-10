@@ -1,6 +1,8 @@
 import tensorflow as tf
 import tensorflow_probability as tfp
 
+from dpconvcnp.utils import to_tensor
+
 import numpy as np
 from scipy import special
 import scipy.optimize as optim
@@ -97,6 +99,6 @@ def sens_per_sigma(
     """
     return tfp.math.find_root_chandrupatla(
         lambda sens_per_sigma: delta_from_epsilon_and_sens_per_sigma(epsilon, sens_per_sigma) - delta,
-        low=lower_bound,
-        high=upper_bound,
+        low=to_tensor(lower_bound, dtype=epsilon.dtype),
+        high=to_tensor(upper_bound, dtype=epsilon.dtype),
     ).estimated_root

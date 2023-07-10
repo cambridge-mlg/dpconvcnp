@@ -2,8 +2,8 @@ import argparse
 
 import tensorflow as tf
 
+from dpconvcnp.model.dpconvcnp import DPConvCNP
 from dpconvcnp.data.gp import (
-    KERNEL_TYPES,
     RandomScaleGPGenerator,
 )
 
@@ -149,6 +149,127 @@ parser.add_argument(
     help="Maximum log10 DP delta.",
 )
 
+parser.add_argument(
+    "--points-per-unit",
+    type=int,
+    default=32,
+    help="Number of points per unit.",
+)
+
+parser.add_argument(
+    "--margin",
+    type=float,
+    default=0.1,
+    help="Margin.",
+)
+
+parser.add_argument(
+    "--lengthscale-init",
+    type=float,
+    default=0.25,
+    help="Initial lengthscale.",
+)
+
+parser.add_argument(
+    "--y-bound-init",
+    type=float,
+    default=2.,
+    help="Initial y bound.",
+)
+
+parser.add_argument(
+    "--w-noise-init",
+    type=float,
+    default=0.1,
+    help="Initial w noise.",
+)
+
+parser.add_argument(
+    "--encoder-lengthscale-trainable",
+    action="store_true",
+    help="Whether to train the encoder lengthscale.",
+)
+
+parser.add_argument(
+    "--y-bound-trainable",
+    action="store_true",
+    help="Whether to train the y bound.",
+)
+
+parser.add_argument(
+    "--w-noise-trainable",
+    action="store_true",
+    help="Whether to train the w noise.",
+)
+
+parser.add_argument(
+    "--architecture",
+    type=str,
+    choices=[
+        "unet",
+    ],
+    default="unet",
+    help="Convolutional architecture to use.",
+)
+
+parser.add_argument(
+    "--first-channels",
+    type=int,
+    default=32,
+    help="Number of channels in the first convolutional layer.",
+)
+
+parser.add_argument(
+    "--last-channels",
+    type=int,
+    default=2,
+    help="Number of channels in the last convolutional layer.",
+)
+
+parser.add_argument(
+    "--kernel-size",
+    type=int,
+    default=3,
+    help="Size of the convolutional kernels.",
+)
+
+parser.add_argument(
+    "--num-channels",
+    type=int,
+    nargs="+",
+    default=[32, 32, 32, 32, 32],
+    help="Number of channels in each UNet layer.",
+)
+
+parser.add_argument(
+    "--strides",
+    type=int,
+    nargs="+",
+    default=[2, 2, 2, 2, 2],
+    help="Strides in each UNet layer.",
+)
+
+parser.add_argument(
+    "--dim",
+    type=int,
+    default=1,
+    help="Dimensionality of the input data.",
+)
+
+parser.add_argument(
+    "--model-seed",
+    type=int,
+    default=0,
+    help="Random seed.",
+)
+
+parser.add_argument(
+    "--experiment-seed",
+    type=int,
+    default=1,
+    help="Random seed.",
+)
+
 args = parser.parse_args()
 
 data_seed = [0, args.data_seed]
@@ -174,6 +295,32 @@ generator = RandomScaleGPGenerator(
     max_log10_delta=args.max_log10_delta,
 )
 
+architecture_kwargs = {
+    "first_channels": args.first_channels,
+    "last_channels": args.last_channels,
+    "kernel_size": args.kernel_size,
+    "num_channels": args.num_channels,
+    "strides": args.strides,
+    "dim": args.x_dim,
+    "seed": args.model_seed,
+}
+
+dpconvcp = DPConvCNP(
+    points_per_unit=args.points_per_unit,
+    margin=args.margin,
+    lenghtscale_init=args.lengthscale_init,
+    y_bound_init=args.y_bound_init,
+    w_noise_init=args.w_noise_init,
+    encoder_lengthscale_trainable=args.encoder_lengthscale_trainable,
+    y_bound_trainable=args.y_bound_trainable,
+    w_noise_trainable=args.w_noise_trainable,
+    architcture=args.architecture,
+    architcture_kwargs=architecture_kwargs,
+)
+
+
+seed = [0, args.experiment_seed]
+
 for batch in generator:
-    print(batch)
+    seed, mean, std = dpconvcp(seed=seed, batch=batch)
     breakpoint()

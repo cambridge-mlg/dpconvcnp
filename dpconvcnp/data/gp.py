@@ -94,7 +94,9 @@ class RandomScaleGPGenerator(GPGenerator):
         self.min_log10_lengthscale = to_tensor(min_log10_lengthscale, f64)
         self.max_log10_lengthscale = to_tensor(max_log10_lengthscale, f64)
 
-        assert self.kernel_type in KERNEL_TYPES
+        assert self.kernel_type in KERNEL_TYPES, (
+            f"kernel_type must be in {KERNEL_TYPES}, found {self.kernel_type=}."
+        )
 
 
     def set_up_kernel(self, seed: Seed) -> Tuple[Seed, gpflow.kernels.Kernel]:

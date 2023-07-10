@@ -1,26 +1,34 @@
-from typing import Any, Dict
+from typing import Any, Dict, Tuple
 import tensorflow as tf
 import tensorflow_probability as tfp
 
 from dpconvcnp.data.data import Batch
 from dpconvcnp.random import Seed
 from dpconvcnp.model.setconv import DPSetConvEncoder, SetConvDecoder
+from dpconvcnp.model.conv import UNet
 
 tfd = tfp.distributions
+
+
+CONV_ARCHITECTURES = {
+    "unet": UNet,
+}
 
 
 class DPConvCNP(tf.Module):
 
     def __init__(
         self,
-        conv_arch: Dict[str, Any],
         points_per_unit: int,
+        margin: float,
         lenghtscale_init: float,
         y_bound_init: float,
         w_noise_init: float,
         encoder_lengthscale_trainable: bool,
         y_bound_trainable: bool,
         w_noise_trainable: bool,
+        architcture: str,
+        architcture_kwargs: Dict[str, Any],
         decoder_lengthscale_trainable: bool = True,
         dtype: tf.DType = tf.float32,
         name: str = "dpconvcp",
@@ -28,8 +36,14 @@ class DPConvCNP(tf.Module):
     ):
         super().__init__(name=name, **kwargs)
 
+        assert architcture in CONV_ARCHITECTURES, (
+            f"conv_arch['name'] must be in {CONV_ARCHITECTURES.keys()}, "
+            f"found {architcture=}."
+        )
+
         self.dpsetconv_encoder = DPSetConvEncoder(
             points_per_unit=points_per_unit,
+            margin=margin,
             lenghtscale_init=lenghtscale_init,
             y_bound_init=y_bound_init,
             w_noise_init=w_noise_init,
@@ -40,16 +54,14 @@ class DPConvCNP(tf.Module):
         )
 
         self.setconv_decoder = SetConvDecoder(
-            points_per_unit=points_per_unit,
+            lengthscale_init=lenghtscale_init,
             trainable=decoder_lengthscale_trainable,
         )
 
-        self.conv_arch = self.build_conv_arch(conv_arch=conv_arch)
+        self.conv_arch = CONV_ARCHITECTURES[architcture](**architcture_kwargs)
 
-    def build_conv_arch(self, conv_arch: Dict[str, Any]):
-        pass
-
-    def __call__(self, seed: Seed, batch: Batch, training: bool = False):
+        
+    def __call__(self, seed: Seed, batch: Batch):
         
         seed, x_grid, z_grid = self.dpsetconv_encoder(
             seed=seed,
@@ -60,7 +72,7 @@ class DPConvCNP(tf.Module):
             delta=batch.delta,
         )
 
-        z_grid = self.conv_arch(z, training=training)
+        z_grid = self.conv_arch(z_grid)
 
         z_trg = self.setconv_decoder(
             x_grid=x_grid,
@@ -74,6 +86,7 @@ class DPConvCNP(tf.Module):
         std = tf.math.softplus(z_trg[..., 1])
 
         return seed, mean, std
+
 
     def loss(self, seed: Seed, batch: Batch):
 
