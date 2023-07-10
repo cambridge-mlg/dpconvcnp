@@ -82,15 +82,15 @@ class DPConvCNP(tf.Module):
 
         assert z_trg.shape[-1] == 2
 
-        mean = z_trg[..., 0]
-        std = tf.math.softplus(z_trg[..., 1])
+        mean = z_trg[..., :1]
+        std = tf.math.softplus(z_trg[..., 1:]) + 1e-2
 
         return seed, mean, std
 
 
     def loss(self, seed: Seed, batch: Batch):
 
-        seed, mean, std = self.__call__(seed=seed, batch=batch, training=True)
+        seed, mean, std = self.__call__(seed=seed, batch=batch)
 
         log_prob = tfd.Normal(loc=mean, scale=std).log_prob(batch.y_trg)
 

@@ -323,4 +323,5 @@ seed = [0, args.experiment_seed]
 
 for batch in generator:
     seed, mean, std = dpconvcp(seed=seed, batch=batch)
+    loss = dpconvcp.loss(seed=seed, batch=batch)
     breakpoint()
