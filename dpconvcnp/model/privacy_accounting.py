@@ -31,7 +31,7 @@ def numpy_delta_from_epsilon_and_sens_per_sigma(epsilon: float, sens_per_sigma: 
     return 0.5 * (term1 - term2)
 
 
-def numpy_find_sens_per_sigma(
+def numpy_sens_per_sigma(
         epsilon: float,
         delta: float,
         lower_bound: float = 0.,
@@ -50,7 +50,7 @@ def numpy_find_sens_per_sigma(
         float: The required sensitivity per noise standard deviation.
     """
     return optim.brentq(
-        lambda sens_per_sigma: delta_from_epsilon_and_sens_per_sigma(
+        lambda sens_per_sigma: numpy_delta_from_epsilon_and_sens_per_sigma(
             epsilon,
             sens_per_sigma
         ) - delta,
@@ -82,7 +82,7 @@ def delta_from_epsilon_and_sens_per_sigma(epsilon: tf.Tensor, sens_per_sigma: tf
 def sens_per_sigma(
         epsilon: tf.Tensor,
         delta: tf.Tensor,
-        lower_bound: tf.Tensor = 0.,
+        lower_bound: tf.Tensor = 1e-6,
         upper_bound: tf.Tensor = 20.,
     ) -> tf.Tensor:
     """Computes the required sensitivity per noise standard deviation for

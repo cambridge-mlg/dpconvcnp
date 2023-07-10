@@ -83,7 +83,7 @@ class DPConvCNP(tf.Module):
         assert z_trg.shape[-1] == 2
 
         mean = z_trg[..., :1]
-        std = tf.math.softplus(z_trg[..., 1:]) + 1e-2
+        std = tf.math.softplus(z_trg[..., 1:])
 
         return seed, mean, std
 
@@ -94,4 +94,4 @@ class DPConvCNP(tf.Module):
 
         log_prob = tfd.Normal(loc=mean, scale=std).log_prob(batch.y_trg)
 
-        return tf.reduce_sum(log_prob, axis=[1, 2])
+        return seed, - tf.reduce_sum(log_prob, axis=[1, 2])

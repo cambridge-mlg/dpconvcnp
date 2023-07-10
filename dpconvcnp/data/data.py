@@ -1,6 +1,6 @@
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
-from typing import Tuple, Optional
+from typing import Tuple, Optional, Callable
 
 import tensorflow as tf
 
@@ -21,6 +21,11 @@ class Batch:
 
     epsilon: Optional[tf.Tensor] = None
     delta: Optional[tf.Tensor] = None
+
+    gt_mean: Optional[tf.Tensor] = None
+    gt_std: Optional[tf.Tensor] = None
+    gt_log_lik: Optional[tf.Tensor] = None
+
 
 class DataGenerator(ABC):
 
@@ -184,19 +189,14 @@ class SyntheticGenerator(DataGenerator, ABC):
         seed, num_ctx, num_trg = self.sample_num_ctx_trg(seed=seed)
 
         # Sample entire batch (context and target points)
-        seed, batch = self.sample_full_batch(
+        seed, batch = self.sample_batch(
             seed=seed,
             num_ctx=num_ctx,
             num_trg=num_trg,
         )
 
-        return seed, Batch(
-            x_ctx=batch.x[:, :num_ctx, :],
-            y_ctx=batch.y[:, :num_ctx, :],
-            x_trg=batch.x[:, num_ctx:, :],
-            y_trg=batch.y[:, num_ctx:, :],
-        )
-
+        return seed, batch
+    
     def sample_num_ctx_trg(self, seed: Seed) -> Tuple[Seed, tf.Tensor, tf.Tensor]:
         """Sample the numbers of context and target points in the dataset.
 
@@ -227,13 +227,28 @@ class SyntheticGenerator(DataGenerator, ABC):
 
         return seed, num_ctx, num_trg
 
-    def sample_full_batch(self, seed: Seed, num_ctx: int, num_trg: int) -> Tuple[Seed, Batch]:
+    def sample_batch(self, seed: Seed, num_ctx: int, num_trg: int) -> Tuple[Seed, Batch]:
         
         # Sample inputs, then outputs given inputs
         seed, x = self.sample_inputs(seed=seed, num_ctx=num_ctx, num_trg=num_trg)
-        seed, y = self.sample_outputs(seed=seed, x=x)
+        seed, y, gt_pred = self.sample_outputs(seed=seed, x=x)
 
-        return seed, Batch(x=x, y=y)
+        x_ctx = x[:, :num_ctx, :]
+        y_ctx = y[:, :num_ctx, :]
+        x_trg = x[:, num_ctx:, :]
+        y_trg = y[:, num_ctx:, :]
+
+        gt_mean, gt_std, gt_log_lik = gt_pred(x_ctx, y_ctx, x_trg, y_trg)
+
+        return seed, Batch(
+            x_ctx=x_ctx,
+            y_ctx=y_ctx,
+            x_trg=x_trg,
+            y_trg=y_trg,
+            gt_mean=gt_mean,
+            gt_std=gt_std,
+            gt_log_lik=gt_log_lik,
+        )
 
     def sample_inputs(self, seed: Seed, num_ctx: int, num_trg: int) -> Tuple[Seed, tf.Tensor]:
         """Sample context and target inputs, sampled uniformly from the boxes
@@ -267,7 +282,7 @@ class SyntheticGenerator(DataGenerator, ABC):
         return seed, tf.concat([x_ctx, x_trg], axis=1)
 
     @abstractmethod
-    def sample_outputs(self, seed: Seed, x: tf.Tensor) -> Tuple[Seed, tf.Tensor]:
+    def sample_outputs(self, seed: Seed, x: tf.Tensor) -> Tuple[Seed, tf.Tensor, Callable]:
         """Sample context and target outputs, given the inputs `x`.
         
         Arguments:

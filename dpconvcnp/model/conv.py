@@ -104,7 +104,7 @@ class UNet(tf.Module):
 
 
     def __call__(self, z: tf.Tensor):
-
+        
         z = self.first(z)
         skips = []
 

@@ -5,9 +5,10 @@ from check_shape import check_shape
 
 from dpconvcnp.random import zero_mean_mvn_chol
 from dpconvcnp.random import Seed
-from dpconvcnp.utils import f64, cast
+from dpconvcnp.utils import f64, cast, logit
 from dpconvcnp.model.privacy_accounting import (
-    sens_per_sigma as dp_sens_per_sigma
+    sens_per_sigma as dp_sens_per_sigma,
+    numpy_sens_per_sigma as dp_numpy_sens_per_sigma,
 )
 
 
@@ -39,13 +40,13 @@ class DPSetConvEncoder(tf.Module):
         )
 
         self.log_y_bound = tf.Variable(
-            initial_value=y_bound_init,
+            initial_value=tf.math.log(y_bound_init),
             trainable=y_bound_trainable,
             dtype=dtype,
         )
 
         self.logit_w_noise = tf.Variable(
-            initial_value=w_noise_init,
+            initial_value=logit(w_noise_init),
             trainable=w_noise_trainable,
             dtype=dtype,
         )
@@ -99,17 +100,17 @@ class DPSetConvEncoder(tf.Module):
             points_per_unit=self.points_per_unit,
             margin=self.margin,
         )  # shape (batch_size, n1, ..., ndim, Dx)
-        x_grid = flatten_grid(x_grid)  # shape (batch_size, num_grid_points, Dx)
+        x_grid_flat = flatten_grid(x_grid)  # shape (batch_size, num_grid_points, Dx)
 
         # Compute matrix of weights between context points and grid points
         weights = compute_eq_weights(
-            x1=x_grid,
+            x1=x_grid_flat,
             x2=x_ctx,
-            lengthscale=self.w_noise,
+            lengthscale=self.lengthscale,
         )  # shape (batch_size, num_ctx, num_grid_points)
 
         # Multiply context outputs by weights
-        y_grid = tf.matmul(
+        z_grid_flat = tf.matmul(
             weights,
             y_ctx,
         )  # shape (batch_size, num_grid_points, 2)
@@ -117,17 +118,25 @@ class DPSetConvEncoder(tf.Module):
         # Sample noise and add it to the data and density channels
         seed, noise = self.sample_noise(
             seed=seed,
-            x_grid=x_grid,
+            x_grid=x_grid_flat,
             epsilon=epsilon,
             delta=delta,
         )
         
         check_shape(
-            [y_grid, noise],
+            [z_grid_flat, noise],
             [("B", "G", 2), ("B", "G", 2)],
         )
 
-        return seed, x_grid, y_grid + noise
+        z_grid_flat = z_grid_flat + noise
+
+        # Reshape grid
+        z_grid = tf.reshape(
+            z_grid_flat,
+            shape=(x_grid.shape[0],) + x_grid.shape[1:-1] + (z_grid_flat.shape[-1],),
+        )  # shape (batch_size, n1, ..., ndim, 2)
+
+        return seed, x_grid, z_grid
 
 
     def clip_y(self, y_ctx: tf.Tensor) -> tf.Tensor:

@@ -1,14 +1,37 @@
+from typing import Tuple
 import argparse
 
 import tensorflow as tf
 
 from dpconvcnp.model.dpconvcnp import DPConvCNP
-from dpconvcnp.data.gp import (
-    RandomScaleGPGenerator,
-)
+from dpconvcnp.data.gp import RandomScaleGPGenerator
+from dpconvcnp.random import Seed
+from dpconvcnp.data.data import Batch
 
 log10 = tf.experimental.numpy.log10
 f32 = tf.float32
+
+tf.debugging.enable_check_numerics()
+
+
+def train_step(
+        seed: Seed,
+        model: tf.Module,
+        batch: Batch,
+        optimiser: tf.optimizers.Optimizer,
+        norm_factor: float,
+    ) -> Tuple[Seed, tf.Tensor]:
+
+    with tf.GradientTape() as tape:
+        seed, loss = model.loss(seed=seed, batch=batch)
+        loss = tf.reduce_mean(loss) / norm_factor
+
+    gradients = tape.gradient(loss, model.trainable_variables)
+    optimiser.apply_gradients(zip(gradients, model.trainable_variables))
+
+    return seed, loss
+
+
 
 parser = argparse.ArgumentParser(
     description="Train a DPConvCNP model on a dataset.",
@@ -52,7 +75,7 @@ parser.add_argument(
 parser.add_argument(
     "--max-log10-lengthscale",
     type=float,
-    default=log10(0.25),
+    default=log10(0.10),
     help="Maximum log10 lengthscale.",
 )
 
@@ -66,14 +89,14 @@ parser.add_argument(
 parser.add_argument(
     "--min-num-ctx",
     type=int,
-    default=0,
+    default=1,
     help="Minimum number of context points.",
 )
 
 parser.add_argument(
     "--max-num-ctx",
     type=int,
-    default=128,
+    default=8,
     help="Maximum number of context points.",
 )
 
@@ -166,7 +189,7 @@ parser.add_argument(
 parser.add_argument(
     "--lengthscale-init",
     type=float,
-    default=0.25,
+    default=0.1,
     help="Initial lengthscale.",
 )
 
@@ -180,7 +203,7 @@ parser.add_argument(
 parser.add_argument(
     "--w-noise-init",
     type=float,
-    default=0.1,
+    default=0.5,
     help="Initial w noise.",
 )
 
@@ -229,7 +252,7 @@ parser.add_argument(
 parser.add_argument(
     "--kernel-size",
     type=int,
-    default=3,
+    default=5,
     help="Size of the convolutional kernels.",
 )
 
@@ -237,7 +260,7 @@ parser.add_argument(
     "--num-channels",
     type=int,
     nargs="+",
-    default=[32, 32, 32, 32, 32],
+    default=[64, 64, 64, 64, 64],
     help="Number of channels in each UNet layer.",
 )
 
@@ -268,6 +291,13 @@ parser.add_argument(
     type=int,
     default=1,
     help="Random seed.",
+)
+
+parser.add_argument(
+    "--learning-rate",
+    type=float,
+    default=1e-4,
+    help="Learning rate.",
 )
 
 args = parser.parse_args()
@@ -305,7 +335,7 @@ architecture_kwargs = {
     "seed": args.model_seed,
 }
 
-dpconvcp = DPConvCNP(
+dpconvcnp = DPConvCNP(
     points_per_unit=args.points_per_unit,
     margin=args.margin,
     lenghtscale_init=args.lengthscale_init,
@@ -321,7 +351,30 @@ dpconvcp = DPConvCNP(
 
 seed = [0, args.experiment_seed]
 
-for batch in generator:
-    seed, mean, std = dpconvcp(seed=seed, batch=batch)
-    loss = dpconvcp.loss(seed=seed, batch=batch)
-    breakpoint()
+optimiser = tf.optimizers.Adam(learning_rate=1e-4)
+
+for i, batch in enumerate(generator):
+
+    seed, loss = train_step(
+        seed=seed,
+        model=dpconvcnp,
+        batch=batch,
+        optimiser=optimiser,
+        norm_factor=args.max_num_trg,
+    )
+
+    if i % 100 == 0:
+        seed, mean, std = dpconvcnp(seed=seed, batch=batch)
+        print(dpconvcnp.dpsetconv_encoder.lengthscale)
+        print(loss)
+        print(-tf.reduce_mean(batch.gt_log_lik / args.max_num_trg))
+
+        import matplotlib.pyplot as plt
+        import numpy as np
+        
+        idx = np.argsort(batch.x_trg[0, :, 0])
+        plt.scatter(batch.x_ctx.numpy()[0, :, 0], batch.y_ctx.numpy()[0, :, 0], c="k")
+        plt.scatter(batch.x_trg.numpy()[0, :, 0], batch.y_trg.numpy()[0, :, 0], c="r")
+        plt.plot(batch.x_trg.numpy()[0, idx, 0], mean.numpy()[0, idx, 0], c="b")
+        plt.savefig(f"figs/{i}.png")
+        plt.clf()
