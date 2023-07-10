@@ -82,8 +82,8 @@ def delta_from_epsilon_and_sens_per_sigma(epsilon: tf.Tensor, sens_per_sigma: tf
 def sens_per_sigma(
         epsilon: tf.Tensor,
         delta: tf.Tensor,
-        lower_bound: tf.Tensor = 1e-6,
-        upper_bound: tf.Tensor = 20.,
+        lower_bound: tf.Tensor = 1e-2,
+        upper_bound: tf.Tensor = 10.,
     ) -> tf.Tensor:
     """Computes the required sensitivity per noise standard deviation for
     (epsilon, delta)-DP with the Gaussian mechanism.
@@ -92,7 +92,7 @@ def sens_per_sigma(
         epsilon: DP epsilon parameter
         delta: DP delta parameter
         lower_bound: Lower bound guess on sensitivity per sigma. Defaults to 0.
-        upper_bound: Upper bound guess on sensitivity per sigma. Defaults to 20.
+        upper_bound: Upper bound guess on sensitivity per sigma. Defaults to 10.
 
     Returns:
         float: The required sensitivity per noise standard deviation.

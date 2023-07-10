@@ -5,7 +5,7 @@ from check_shape import check_shape
 
 from dpconvcnp.random import zero_mean_mvn_chol
 from dpconvcnp.random import Seed
-from dpconvcnp.utils import f64, cast, logit
+from dpconvcnp.utils import f64, cast, logit, to_tensor
 from dpconvcnp.model.privacy_accounting import (
     sens_per_sigma as dp_sens_per_sigma,
     numpy_sens_per_sigma as dp_numpy_sens_per_sigma,
@@ -115,20 +115,20 @@ class DPSetConvEncoder(tf.Module):
             y_ctx,
         )  # shape (batch_size, num_grid_points, 2)
 
-        # Sample noise and add it to the data and density channels
-        seed, noise = self.sample_noise(
-            seed=seed,
-            x_grid=x_grid_flat,
-            epsilon=epsilon,
-            delta=delta,
-        )
+        ## Sample noise and add it to the data and density channels
+        #seed, noise = self.sample_noise(
+        #    seed=seed,
+        #    x_grid=x_grid_flat,
+        #    epsilon=epsilon,
+        #    delta=delta,
+        #)
         
-        check_shape(
-            [z_grid_flat, noise],
-            [("B", "G", 2), ("B", "G", 2)],
-        )
+        #check_shape(
+        #    [z_grid_flat, noise],
+        #    [("B", "G", 2), ("B", "G", 2)],
+        #)
 
-        z_grid_flat = z_grid_flat + noise
+        z_grid_flat = z_grid_flat # + noise
 
         # Reshape grid
         z_grid = tf.reshape(
@@ -202,7 +202,17 @@ class DPSetConvEncoder(tf.Module):
         )  # shape (batch_size, num_grid_points,) 
 
         # Compute sensitivity per sigma
-        sens_per_sigma = dp_sens_per_sigma(epsilon=epsilon, delta=delta)
+        #sens_per_sigma = dp_sens_per_sigma(epsilon=epsilon, delta=delta)
+        sens_per_sigma = to_tensor(
+            [
+                dp_numpy_sens_per_sigma(epsilon=e.numpy(), delta=d.numpy())
+                for e, d in zip(epsilon, delta)
+            ],
+            f64,
+        )
+
+        assert ~tf.reduce_any(tf.math.is_nan(sens_per_sigma))
+        assert ~tf.reduce_any(tf.math.is_inf(sens_per_sigma))
 
         # Convert back to input data types
         data_noise = cast(data_noise, dtype=in_dtype)

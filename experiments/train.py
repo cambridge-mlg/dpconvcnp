@@ -11,7 +11,7 @@ from dpconvcnp.data.data import Batch
 log10 = tf.experimental.numpy.log10
 f32 = tf.float32
 
-tf.debugging.enable_check_numerics()
+# tf.debugging.enable_check_numerics()
 
 
 def train_step(
@@ -96,7 +96,7 @@ parser.add_argument(
 parser.add_argument(
     "--max-num-ctx",
     type=int,
-    default=8,
+    default=128,
     help="Maximum number of context points.",
 )
 
@@ -189,7 +189,7 @@ parser.add_argument(
 parser.add_argument(
     "--lengthscale-init",
     type=float,
-    default=0.1,
+    default=0.2,
     help="Initial lengthscale.",
 )
 
@@ -365,9 +365,9 @@ for i, batch in enumerate(generator):
 
     if i % 100 == 0:
         seed, mean, std = dpconvcnp(seed=seed, batch=batch)
-        print(dpconvcnp.dpsetconv_encoder.lengthscale)
-        print(loss)
-        print(-tf.reduce_mean(batch.gt_log_lik / args.max_num_trg))
+        print(i, dpconvcnp.dpsetconv_encoder.lengthscale)
+        print(i, loss)
+        print(i, -tf.reduce_mean(batch.gt_log_lik / args.max_num_trg))
 
         import matplotlib.pyplot as plt
         import numpy as np
@@ -376,5 +376,12 @@ for i, batch in enumerate(generator):
         plt.scatter(batch.x_ctx.numpy()[0, :, 0], batch.y_ctx.numpy()[0, :, 0], c="k")
         plt.scatter(batch.x_trg.numpy()[0, :, 0], batch.y_trg.numpy()[0, :, 0], c="r")
         plt.plot(batch.x_trg.numpy()[0, idx, 0], mean.numpy()[0, idx, 0], c="b")
+        plt.fill_between(
+            batch.x_trg.numpy()[0, idx, 0],
+            mean.numpy()[0, idx, 0] - 2. * std.numpy()[0, idx, 0],
+            mean.numpy()[0, idx, 0] + 2. * std.numpy()[0, idx, 0],
+            color="tab:blue",
+            alpha=0.2,
+        )
         plt.savefig(f"figs/{i}.png")
         plt.clf()
