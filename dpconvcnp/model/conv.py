@@ -85,14 +85,14 @@ class UNet(tf.Module):
 
                 self.convs.append(
                     CONV[dim](
-                        **shared_kwargs(num_channels[i], kernel_size, 1, activation, seed,)
+                        **shared_kwargs(num_channels[i], kernel_size, 2, activation, seed)
                     )
                 )
                 seed += 1
 
                 self.transposed_convs.append(
                     TRANSPOSE_CONV[dim](
-                        **shared_kwargs(num_channels[-i+1], kernel_size, 1, activation, seed,)
+                        **shared_kwargs(num_channels[-i], kernel_size, 2, activation, seed)
                     )
                 )
                 seed += 1
@@ -104,7 +104,14 @@ class UNet(tf.Module):
 
 
     def __call__(self, z: tf.Tensor):
-        
+
+        #import matplotlib.pyplot as plt
+
+        #plt.subplot(1, 2, 1)
+        #plt.plot(z.numpy()[0, :, 0])
+        #plt.subplot(1, 2, 2)
+        #plt.plot(z.numpy()[0, :, 1])
+        #plt.savefig("zin.png")
         z = self.first(z)
         skips = []
 
@@ -117,5 +124,11 @@ class UNet(tf.Module):
             z = tf.concat([z, skip], axis=-1)
             
         z = self.last(z)
+        #plt.subplot(1, 2, 1)
+        #plt.plot(z.numpy()[0, :, 0])
+        #plt.subplot(1, 2, 2)
+        #plt.plot(z.numpy()[0, :, 1])
+        #plt.savefig("zout.png")
+        #breakpoint()
 
         return z

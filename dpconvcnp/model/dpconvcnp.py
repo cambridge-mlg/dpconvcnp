@@ -6,6 +6,7 @@ from dpconvcnp.data.data import Batch
 from dpconvcnp.random import Seed
 from dpconvcnp.model.setconv import DPSetConvEncoder, SetConvDecoder
 from dpconvcnp.model.conv import UNet
+from dpconvcnp.utils import to_tensor
 
 tfd = tfp.distributions
 
@@ -61,15 +62,23 @@ class DPConvCNP(tf.Module):
         self.conv_arch = CONV_ARCHITECTURES[architcture](**architcture_kwargs)
 
         
-    def __call__(self, seed: Seed, batch: Batch):
+    def __call__(
+        self,
+        seed: Seed,
+        x_ctx: tf.Tensor,
+        y_ctx: tf.Tensor,
+        x_trg: tf.Tensor,
+        epsilon: tf.Tensor,
+        delta: tf.Tensor,
+    ):
         
         seed, x_grid, z_grid = self.dpsetconv_encoder(
             seed=seed,
-            x_ctx=batch.x_ctx,
-            y_ctx=batch.y_ctx,
-            x_trg=batch.x_trg,
-            epsilon=batch.epsilon,
-            delta=batch.delta,
+            x_ctx=x_ctx,
+            y_ctx=y_ctx,
+            x_trg=x_trg,
+            epsilon=epsilon,
+            delta=delta,
         )
 
         z_grid = self.conv_arch(z_grid)
@@ -77,21 +86,37 @@ class DPConvCNP(tf.Module):
         z_trg = self.setconv_decoder(
             x_grid=x_grid,
             z_grid=z_grid,
-            x_trg=batch.x_trg,
+            x_trg=x_trg,
         )
 
         assert z_trg.shape[-1] == 2
 
         mean = z_trg[..., :1]
-        std = tf.math.softplus(z_trg[..., 1:])
+        std = tf.math.softplus(z_trg[..., 1:])**0.5
 
         return seed, mean, std
 
 
-    def loss(self, seed: Seed, batch: Batch):
+    def loss(
+        self,
+        seed: Seed,
+        x_ctx: tf.Tensor,
+        y_ctx: tf.Tensor,
+        x_trg: tf.Tensor,
+        y_trg: tf.Tensor,
+        epsilon: tf.Tensor,
+        delta: tf.Tensor,
+    ):
 
-        seed, mean, std = self.__call__(seed=seed, batch=batch)
+        seed, mean, std = self.__call__(
+            seed=seed,
+            x_ctx=x_ctx,
+            y_ctx=y_ctx,
+            x_trg=x_trg,
+            epsilon=epsilon,
+            delta=delta,
+        )
 
-        log_prob = tfd.Normal(loc=mean, scale=std).log_prob(batch.y_trg)
+        log_prob = tfd.Normal(loc=mean, scale=std).log_prob(y_trg)
 
         return seed, - tf.reduce_sum(log_prob, axis=[1, 2])

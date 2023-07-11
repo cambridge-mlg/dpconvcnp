@@ -88,7 +88,7 @@ class DPSetConvEncoder(tf.Module):
         )
 
         # Clip context outputs and concatenate tensor of ones
-        y_ctx = self.clip_y(y_ctx)  # shape (batch_size, num_ctx, 1)
+        # y_ctx = self.clip_y(y_ctx)  # shape (batch_size, num_ctx, 1)
         y_ctx = tf.concat(
             [y_ctx, tf.ones_like(y_ctx)],
             axis=-1,
@@ -277,6 +277,44 @@ class SetConvDecoder(tf.Module):
             lengthscale=self.lengthscale,
         )  # shape (batch_size, num_trg, num_grid_points)
 
+        #import matplotlib.pyplot as plt
+
+        #z = tf.matmul(weights, z_grid)
+
+        #plt.figure(figsize=(12, 5))
+        #plt.subplot(1, 2, 1)
+        #plt.plot(z_grid.numpy()[0, :, 0])
+        #plt.subplot(1, 2, 2)
+        #plt.plot(z_grid.numpy()[0, :, 1])
+        #plt.savefig("z_grid.png")
+        #plt.clf()
+
+        #plt.figure(figsize=(12, 5))
+        #plt.subplot(1, 2, 1)
+        #plt.plot(tf.matmul(weights, z_grid).numpy()[0, :, 0])
+        #plt.subplot(1, 2, 2)
+        #plt.plot(tf.matmul(weights, z_grid).numpy()[0, :, 1])
+        #plt.savefig("z.png")
+        #plt.clf()
+
+        #plt.figure(figsize=(12, 5))
+        #plt.subplot(1, 2, 1)
+        #plt.plot(weights.numpy()[0, 0, :])
+        #plt.subplot(1, 2, 2)
+        #plt.plot(weights.numpy()[0, 1, :])
+        #plt.savefig("w.png")
+        #plt.clf()
+
+        #plt.figure(figsize=(12, 5))
+        #plt.subplot(1, 2, 1)
+        #plt.plot(x_trg.numpy()[0, :, 0])
+        #plt.subplot(1, 2, 2)
+        #plt.plot(x_grid.numpy()[0, :, 0])
+        #plt.savefig("x_grid.png")
+        #plt.clf()
+
+        #breakpoint()
+        
         return tf.matmul(weights, z_grid) # shape (batch_size, num_trg, Dz)
     
 
@@ -312,11 +350,12 @@ def make_discretisation_grid(
     # Take the maximum over the batch, in order to use the same number of 
     # points across all tasks in the batch, in order to enable tensor batching
     num_half_points = tf.reduce_max(num_half_points, axis=0)  # shape (dim,)
+    num_half_points = 2**tf.math.ceil(tf.math.log(num_half_points) / tf.math.log(2.))  # shape (dim,)
 
     # Compute the discretisation grid
     grid = tf.stack(
         tf.meshgrid(
-            *[tf.range(-num, num+1, dtype=x.dtype) for num in num_half_points]
+            *[tf.range(-num, num, dtype=x.dtype) for num in num_half_points]
         ),
         axis=-1,
     )  # shape (n1, n2, ..., ndim, dim)
@@ -366,7 +405,7 @@ def compute_eq_weights(
 
     # Compute pairwise distances between x1 and x2
     dist2 = tf.reduce_sum(
-        tf.square(x1[:, :, None, :] - x2[:, None, :, :]),
+        (x1[:, :, None, :] - x2[:, None, :, :])**2.,
         axis=-1,
     )  # shape (batch_size, num_x1, num_x2)
 

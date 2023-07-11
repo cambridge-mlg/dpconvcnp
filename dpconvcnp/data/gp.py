@@ -156,7 +156,7 @@ class RandomScaleGPGenerator(GPGenerator):
             minval=self.min_log10_lengthscale,
             maxval=self.max_log10_lengthscale,
         )
-        lengthscale = tf.pow(10.0, log10_lengthscale)
+        lengthscale = 10.**log10_lengthscale
         
         if self.kernel_type == "eq":
             kernel = gpflow.kernels.SquaredExponential(lengthscales=lengthscale)

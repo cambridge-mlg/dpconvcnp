@@ -1,7 +1,10 @@
 from typing import Tuple
 import argparse
+import os
+import shutil
 
 import tensorflow as tf
+import tensorboard
 
 from dpconvcnp.model.dpconvcnp import DPConvCNP
 from dpconvcnp.data.gp import RandomScaleGPGenerator
@@ -23,14 +26,21 @@ def train_step(
     ) -> Tuple[Seed, tf.Tensor]:
 
     with tf.GradientTape() as tape:
-        seed, loss = model.loss(seed=seed, batch=batch)
+        seed, loss = model.loss(
+            seed=seed,
+            x_ctx=batch.x_ctx,
+            y_ctx=batch.y_ctx,
+            x_trg=batch.x_trg,
+            y_trg=batch.y_trg,
+            epsilon=batch.epsilon,
+            delta=batch.delta,
+        )
         loss = tf.reduce_mean(loss) / norm_factor
 
     gradients = tape.gradient(loss, model.trainable_variables)
     optimiser.apply_gradients(zip(gradients, model.trainable_variables))
 
     return seed, loss
-
 
 
 parser = argparse.ArgumentParser(
@@ -75,7 +85,7 @@ parser.add_argument(
 parser.add_argument(
     "--max-log10-lengthscale",
     type=float,
-    default=log10(0.10),
+    default=log10(0.25),
     help="Maximum log10 lengthscale.",
 )
 
@@ -96,7 +106,7 @@ parser.add_argument(
 parser.add_argument(
     "--max-num-ctx",
     type=int,
-    default=128,
+    default=16,
     help="Maximum number of context points.",
 )
 
@@ -189,7 +199,7 @@ parser.add_argument(
 parser.add_argument(
     "--lengthscale-init",
     type=float,
-    default=0.2,
+    default=0.1,
     help="Initial lengthscale.",
 )
 
@@ -260,7 +270,7 @@ parser.add_argument(
     "--num-channels",
     type=int,
     nargs="+",
-    default=[64, 64, 64, 64, 64],
+    default=[64, 64, 64, 64, 64, 64],
     help="Number of channels in each UNet layer.",
 )
 
@@ -268,7 +278,7 @@ parser.add_argument(
     "--strides",
     type=int,
     nargs="+",
-    default=[2, 2, 2, 2, 2],
+    default=[2, 2, 2, 2, 2, 2],
     help="Strides in each UNet layer.",
 )
 
@@ -348,40 +358,62 @@ dpconvcnp = DPConvCNP(
     architcture_kwargs=architecture_kwargs,
 )
 
+tmp_logdir = "logs"
+#if os.path.exists("logs"):
+#    shutil.rmtree(tmp_logdir)
+
+writer = tensorboard.summary.Writer(tmp_logdir)
 
 seed = [0, args.experiment_seed]
 
-optimiser = tf.optimizers.Adam(learning_rate=1e-4)
+optimiser = tf.optimizers.Adam(learning_rate=args.learning_rate)
 
-for i, batch in enumerate(generator):
-
-    seed, loss = train_step(
-        seed=seed,
-        model=dpconvcnp,
-        batch=batch,
-        optimiser=optimiser,
-        norm_factor=args.max_num_trg,
-    )
-
-    if i % 100 == 0:
-        seed, mean, std = dpconvcnp(seed=seed, batch=batch)
-        print(i, dpconvcnp.dpsetconv_encoder.lengthscale)
-        print(i, loss)
-        print(i, -tf.reduce_mean(batch.gt_log_lik / args.max_num_trg))
-
-        import matplotlib.pyplot as plt
-        import numpy as np
-        
-        idx = np.argsort(batch.x_trg[0, :, 0])
-        plt.scatter(batch.x_ctx.numpy()[0, :, 0], batch.y_ctx.numpy()[0, :, 0], c="k")
-        plt.scatter(batch.x_trg.numpy()[0, :, 0], batch.y_trg.numpy()[0, :, 0], c="r")
-        plt.plot(batch.x_trg.numpy()[0, idx, 0], mean.numpy()[0, idx, 0], c="b")
-        plt.fill_between(
-            batch.x_trg.numpy()[0, idx, 0],
-            mean.numpy()[0, idx, 0] - 2. * std.numpy()[0, idx, 0],
-            mean.numpy()[0, idx, 0] + 2. * std.numpy()[0, idx, 0],
-            color="tab:blue",
-            alpha=0.2,
+for epoch in range(100):
+    for i, batch in enumerate(generator):
+        seed, loss = train_step(
+            seed=seed,
+            model=dpconvcnp,
+            batch=batch,
+            optimiser=optimiser,
+            norm_factor=args.max_num_trg,
         )
-        plt.savefig(f"figs/{i}.png")
-        plt.clf()
+
+        writer.add_scalar("loss", loss, i)
+
+        if i % 100 == 0:
+
+            x_ctx = batch.x_ctx[:1]
+            y_ctx = batch.y_ctx[:1]
+            x_trg = tf.linspace(-4., 4., 400)[None, :, None]
+            epsilon = batch.epsilon[:1]
+            delta = batch.delta[:1]
+
+            seed, mean, std = dpconvcnp(
+                seed=seed,
+                x_ctx=x_ctx,
+                y_ctx=y_ctx,
+                x_trg=x_trg,
+                epsilon=epsilon,
+                delta=delta,
+            )
+            #print(i, dpconvcnp.dpsetconv_encoder.lengthscale)
+            print(epoch, i, loss)
+            #print(i, -tf.reduce_mean(batch.gt_log_lik / args.max_num_trg))
+
+            import matplotlib.pyplot as plt
+            import numpy as np
+            
+            idx = np.argsort(x_trg[0, :, 0])
+            plt.scatter(batch.x_ctx.numpy()[0, :, 0], batch.y_ctx.numpy()[0, :, 0], c="k")
+            plt.scatter(batch.x_trg.numpy()[0, :, 0], batch.y_trg.numpy()[0, :, 0], c="r")
+            plt.plot(x_trg.numpy()[0, idx, 0], mean.numpy()[0, idx, 0], c="b")
+            plt.fill_between(
+                x_trg.numpy()[0, idx, 0],
+                mean.numpy()[0, idx, 0] - 2. * std.numpy()[0, idx, 0],
+                mean.numpy()[0, idx, 0] + 2. * std.numpy()[0, idx, 0],
+                color="tab:blue",
+                alpha=0.2,
+            )
+
+            plt.savefig(f"figs/{i}.png")
+            plt.clf()
