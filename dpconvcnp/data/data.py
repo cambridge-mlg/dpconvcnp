@@ -25,6 +25,7 @@ class Batch:
     gt_mean: Optional[tf.Tensor] = None
     gt_std: Optional[tf.Tensor] = None
     gt_log_lik: Optional[tf.Tensor] = None
+    gt_pred: Optional[Callable] = None
 
 
 class DataGenerator(ABC):
@@ -238,16 +239,12 @@ class SyntheticGenerator(DataGenerator, ABC):
         x_trg = x[:, num_ctx:, :]
         y_trg = y[:, num_ctx:, :]
 
-        gt_mean, gt_std, gt_log_lik = gt_pred(x_ctx, y_ctx, x_trg, y_trg)
-
         return seed, Batch(
             x_ctx=x_ctx,
             y_ctx=y_ctx,
             x_trg=x_trg,
             y_trg=y_trg,
-            gt_mean=gt_mean,
-            gt_std=gt_std,
-            gt_log_lik=gt_log_lik,
+            gt_pred=gt_pred,
         )
 
     def sample_inputs(self, seed: Seed, num_ctx: int, num_trg: int) -> Tuple[Seed, tf.Tensor]:

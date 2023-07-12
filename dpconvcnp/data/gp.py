@@ -1,5 +1,5 @@
 from abc import abstractmethod, ABC
-from typing import Dict, Tuple, Callable
+from typing import Tuple, Callable, Optional
 
 import tensorflow as tf
 import tensorflow_probability as tfp
@@ -92,15 +92,14 @@ class GPGenerator(SyntheticGenerator, ABC):
                 x_ctx: tf.Tensor,
                 y_ctx: tf.Tensor,
                 x_trg: tf.Tensor,
-                y_trg: tf.Tensor,
-            ) -> Tuple[tf.Tensor, tf.Tensor, tf.Tensor]:
+                y_trg: Optional[tf.Tensor] = None,
+            ) -> Tuple[tf.Tensor, tf.Tensor, Optional[tf.Tensor]]:
 
             dtype = x_ctx.dtype
 
             x_ctx = cast(x_ctx, f64)
             y_ctx = cast(y_ctx, f64)
             x_trg = cast(x_trg, f64)
-            y_trg = cast(y_trg, f64)
             num_ctx = x_ctx.shape[1]
 
             kernel_plus_noise = kernel + gpflow.kernels.White(self.noise_std**2.)
@@ -115,10 +114,19 @@ class GPGenerator(SyntheticGenerator, ABC):
             cov = ktt - tf.matmul(ktc, tf.linalg.solve(kcc, kct))
             std = tf.sqrt(tf.linalg.diag_part(cov))
 
-            gt_log_lik = tfd.Normal(loc=mean, scale=std).log_prob(y_trg[:, :, 0])
-            gt_log_lik = tf.reduce_sum(gt_log_lik, axis=1)
+            if y_trg is not None:
+                y_trg = cast(y_trg, f64)
+                gt_log_lik = tfd.Normal(loc=mean, scale=std).log_prob(y_trg[:, :, 0])
+                gt_log_lik = tf.reduce_sum(gt_log_lik, axis=1)
+                gt_log_lik = cast(gt_log_lik, dtype)
 
-            return cast(mean, dtype), cast(std, dtype), cast(gt_log_lik, dtype)
+            else:
+                gt_log_lik = None
+
+            mean = cast(mean, dtype)
+            std = cast(std, dtype)
+
+            return mean, std, gt_log_lik
 
         return gt_pred
 

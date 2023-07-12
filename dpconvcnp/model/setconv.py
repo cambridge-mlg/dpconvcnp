@@ -88,7 +88,7 @@ class DPSetConvEncoder(tf.Module):
         )
 
         # Clip context outputs and concatenate tensor of ones
-        # y_ctx = self.clip_y(y_ctx)  # shape (batch_size, num_ctx, 1)
+        y_ctx = self.clip_y(y_ctx)  # shape (batch_size, num_ctx, 1)
         y_ctx = tf.concat(
             [y_ctx, tf.ones_like(y_ctx)],
             axis=-1,
@@ -115,20 +115,20 @@ class DPSetConvEncoder(tf.Module):
             y_ctx,
         )  # shape (batch_size, num_grid_points, 2)
 
-        ## Sample noise and add it to the data and density channels
-        #seed, noise = self.sample_noise(
-        #    seed=seed,
-        #    x_grid=x_grid_flat,
-        #    epsilon=epsilon,
-        #    delta=delta,
-        #)
+        # Sample noise and add it to the data and density channels
+        seed, noise = self.sample_noise(
+            seed=seed,
+            x_grid=x_grid_flat,
+            epsilon=epsilon,
+            delta=delta,
+        )
         
-        #check_shape(
-        #    [z_grid_flat, noise],
-        #    [("B", "G", 2), ("B", "G", 2)],
-        #)
+        check_shape(
+            [z_grid_flat, noise],
+            [("B", "G", 2), ("B", "G", 2)],
+        )
 
-        z_grid_flat = z_grid_flat # + noise
+        z_grid_flat = z_grid_flat + noise
 
         # Reshape grid
         z_grid = tf.reshape(
@@ -236,13 +236,15 @@ class DPSetConvEncoder(tf.Module):
 
 class SetConvDecoder(tf.Module):
 
-    def __init__(self, *, lengthscale_init: float, trainable: bool = True):
+    def __init__(self, *, lengthscale_init: float, scaling_factor: float, trainable: bool = True):
         super().__init__()
 
         self.log_lengthscale = tf.Variable(
             initial_value=tf.math.log(lengthscale_init),
             trainable=trainable,
         )
+    
+        self.scaling_factor = scaling_factor
 
     @property
     def lengthscale(self) -> tf.Tensor:
@@ -315,7 +317,7 @@ class SetConvDecoder(tf.Module):
 
         #breakpoint()
         
-        return tf.matmul(weights, z_grid) # shape (batch_size, num_trg, Dz)
+        return tf.matmul(weights, z_grid) / self.scaling_factor # shape (batch_size, num_trg, Dz)
     
 
 def make_discretisation_grid(

@@ -20,6 +20,7 @@ class DPConvCNP(tf.Module):
 
     def __init__(
         self,
+        dim: int,
         points_per_unit: int,
         margin: float,
         lenghtscale_init: float,
@@ -57,6 +58,7 @@ class DPConvCNP(tf.Module):
         self.setconv_decoder = SetConvDecoder(
             lengthscale_init=lenghtscale_init,
             trainable=decoder_lengthscale_trainable,
+            scaling_factor=points_per_unit**dim,
         )
 
         self.conv_arch = CONV_ARCHITECTURES[architcture](**architcture_kwargs)

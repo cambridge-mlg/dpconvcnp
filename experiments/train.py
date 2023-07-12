@@ -1,7 +1,5 @@
 from typing import Tuple
 import argparse
-import os
-import shutil
 
 import tensorflow as tf
 import tensorboard
@@ -92,7 +90,7 @@ parser.add_argument(
 parser.add_argument(
     "--noise-std",
     type=float,
-    default=0.1,
+    default=0.2,
     help="Standard deviation of the noise.",
 )
 
@@ -106,7 +104,7 @@ parser.add_argument(
 parser.add_argument(
     "--max-num-ctx",
     type=int,
-    default=16,
+    default=256,
     help="Maximum number of context points.",
 )
 
@@ -199,7 +197,7 @@ parser.add_argument(
 parser.add_argument(
     "--lengthscale-init",
     type=float,
-    default=0.1,
+    default=0.2,
     help="Initial lengthscale.",
 )
 
@@ -346,6 +344,7 @@ architecture_kwargs = {
 }
 
 dpconvcnp = DPConvCNP(
+    dim=args.x_dim,
     points_per_unit=args.points_per_unit,
     margin=args.margin,
     lenghtscale_init=args.lengthscale_init,
@@ -368,8 +367,10 @@ seed = [0, args.experiment_seed]
 
 optimiser = tf.optimizers.Adam(learning_rate=args.learning_rate)
 
+c = 0
 for epoch in range(100):
     for i, batch in enumerate(generator):
+        c += 1
         seed, loss = train_step(
             seed=seed,
             model=dpconvcnp,
@@ -378,7 +379,10 @@ for epoch in range(100):
             norm_factor=args.max_num_trg,
         )
 
-        writer.add_scalar("loss", loss, i)
+        writer.add_scalar("loss", loss, c)
+        writer.add_scalar("lengthscale", dpconvcnp.dpsetconv_encoder.lengthscale, c)
+        writer.add_scalar("y_bound", dpconvcnp.dpsetconv_encoder.y_bound, c)
+        writer.add_scalar("w_noise", dpconvcnp.dpsetconv_encoder.w_noise, c)
 
         if i % 100 == 0:
 
@@ -402,6 +406,12 @@ for epoch in range(100):
 
             import matplotlib.pyplot as plt
             import numpy as np
+
+            gt_mean, gt_std, _ = batch.gt_pred(
+                x_ctx=x_ctx,
+                y_ctx=y_ctx,
+                x_trg=x_trg,
+            )
             
             idx = np.argsort(x_trg[0, :, 0])
             plt.scatter(batch.x_ctx.numpy()[0, :, 0], batch.y_ctx.numpy()[0, :, 0], c="k")
@@ -414,6 +424,10 @@ for epoch in range(100):
                 color="tab:blue",
                 alpha=0.2,
             )
+            plt.plot(x_trg.numpy()[0, :, 0], gt_mean.numpy()[0, :], "--", color="tab:purple")
+            plt.plot(x_trg.numpy()[0, :, 0], gt_mean.numpy()[0, :] + 2 * gt_std.numpy()[0, :], "--", color="tab:purple")
+            plt.plot(x_trg.numpy()[0, :, 0], gt_mean.numpy()[0, :] - 2 * gt_std.numpy()[0, :], "--", color="tab:purple")
+
 
             plt.savefig(f"figs/{i}.png")
             plt.clf()
