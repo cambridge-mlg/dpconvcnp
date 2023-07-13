@@ -8,7 +8,6 @@ import tensorboard
 
 from dpconvcnp.random import Seed
 from dpconvcnp.data.data import Batch
-from dpconvcnp.utils import make_seed
 
 log10 = tf.experimental.numpy.log10
 f32 = tf.float32
