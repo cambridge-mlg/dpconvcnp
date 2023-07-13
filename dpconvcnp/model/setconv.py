@@ -18,7 +18,7 @@ class DPSetConvEncoder(tf.Module):
         self,
         *,
         points_per_unit: int,
-        lenghtscale_init: float,
+        lengthscale_init: float,
         y_bound_init: float,
         w_noise_init: float,
         margin: float,
@@ -34,7 +34,7 @@ class DPSetConvEncoder(tf.Module):
         self.points_per_unit = points_per_unit
 
         self.log_lengthscale = tf.Variable(
-            initial_value=tf.math.log(lenghtscale_init),
+            initial_value=tf.math.log(lengthscale_init),
             trainable=lengthscale_trainable,
             dtype=dtype,
         )
@@ -279,44 +279,6 @@ class SetConvDecoder(tf.Module):
             lengthscale=self.lengthscale,
         )  # shape (batch_size, num_trg, num_grid_points)
 
-        #import matplotlib.pyplot as plt
-
-        #z = tf.matmul(weights, z_grid)
-
-        #plt.figure(figsize=(12, 5))
-        #plt.subplot(1, 2, 1)
-        #plt.plot(z_grid.numpy()[0, :, 0])
-        #plt.subplot(1, 2, 2)
-        #plt.plot(z_grid.numpy()[0, :, 1])
-        #plt.savefig("z_grid.png")
-        #plt.clf()
-
-        #plt.figure(figsize=(12, 5))
-        #plt.subplot(1, 2, 1)
-        #plt.plot(tf.matmul(weights, z_grid).numpy()[0, :, 0])
-        #plt.subplot(1, 2, 2)
-        #plt.plot(tf.matmul(weights, z_grid).numpy()[0, :, 1])
-        #plt.savefig("z.png")
-        #plt.clf()
-
-        #plt.figure(figsize=(12, 5))
-        #plt.subplot(1, 2, 1)
-        #plt.plot(weights.numpy()[0, 0, :])
-        #plt.subplot(1, 2, 2)
-        #plt.plot(weights.numpy()[0, 1, :])
-        #plt.savefig("w.png")
-        #plt.clf()
-
-        #plt.figure(figsize=(12, 5))
-        #plt.subplot(1, 2, 1)
-        #plt.plot(x_trg.numpy()[0, :, 0])
-        #plt.subplot(1, 2, 2)
-        #plt.plot(x_grid.numpy()[0, :, 0])
-        #plt.savefig("x_grid.png")
-        #plt.clf()
-
-        #breakpoint()
-        
         return tf.matmul(weights, z_grid) / self.scaling_factor # shape (batch_size, num_trg, Dz)
     
 

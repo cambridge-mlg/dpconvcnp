@@ -1,19 +1,12 @@
-from typing import Any, Dict, Tuple
+from typing import Tuple
 import tensorflow as tf
 import tensorflow_probability as tfp
 
 from dpconvcnp.data.data import Batch
 from dpconvcnp.random import Seed
 from dpconvcnp.model.setconv import DPSetConvEncoder, SetConvDecoder
-from dpconvcnp.model.conv import UNet
-from dpconvcnp.utils import to_tensor
 
 tfd = tfp.distributions
-
-
-CONV_ARCHITECTURES = {
-    "unet": UNet,
-}
 
 
 class DPConvCNP(tf.Module):
@@ -23,30 +16,24 @@ class DPConvCNP(tf.Module):
         dim: int,
         points_per_unit: int,
         margin: float,
-        lenghtscale_init: float,
+        lengthscale_init: float,
         y_bound_init: float,
         w_noise_init: float,
         encoder_lengthscale_trainable: bool,
+        decoder_lengthscale_trainable: bool,
         y_bound_trainable: bool,
         w_noise_trainable: bool,
-        architcture: str,
-        architcture_kwargs: Dict[str, Any],
-        decoder_lengthscale_trainable: bool = True,
+        conv_net: tf.Module,
         dtype: tf.DType = tf.float32,
         name: str = "dpconvcp",
         **kwargs,
     ):
         super().__init__(name=name, **kwargs)
 
-        assert architcture in CONV_ARCHITECTURES, (
-            f"conv_arch['name'] must be in {CONV_ARCHITECTURES.keys()}, "
-            f"found {architcture=}."
-        )
-
         self.dpsetconv_encoder = DPSetConvEncoder(
             points_per_unit=points_per_unit,
             margin=margin,
-            lenghtscale_init=lenghtscale_init,
+            lengthscale_init=lengthscale_init,
             y_bound_init=y_bound_init,
             w_noise_init=w_noise_init,
             lengthscale_trainable=encoder_lengthscale_trainable,
@@ -56,12 +43,12 @@ class DPConvCNP(tf.Module):
         )
 
         self.setconv_decoder = SetConvDecoder(
-            lengthscale_init=lenghtscale_init,
+            lengthscale_init=lengthscale_init,
             trainable=decoder_lengthscale_trainable,
             scaling_factor=points_per_unit**dim,
         )
 
-        self.conv_arch = CONV_ARCHITECTURES[architcture](**architcture_kwargs)
+        self.conv_net = conv_net
 
         
     def __call__(
@@ -72,7 +59,7 @@ class DPConvCNP(tf.Module):
         x_trg: tf.Tensor,
         epsilon: tf.Tensor,
         delta: tf.Tensor,
-    ):
+    ) -> Tuple[Seed, tf.Tensor, tf.Tensor]:
         
         seed, x_grid, z_grid = self.dpsetconv_encoder(
             seed=seed,
@@ -83,7 +70,7 @@ class DPConvCNP(tf.Module):
             delta=delta,
         )
 
-        z_grid = self.conv_arch(z_grid)
+        z_grid = self.conv_net(z_grid)
 
         z_trg = self.setconv_decoder(
             x_grid=x_grid,
@@ -108,7 +95,7 @@ class DPConvCNP(tf.Module):
         y_trg: tf.Tensor,
         epsilon: tf.Tensor,
         delta: tf.Tensor,
-    ):
+    ) -> Tuple[Seed, tf.Tensor]:
 
         seed, mean, std = self.__call__(
             seed=seed,
