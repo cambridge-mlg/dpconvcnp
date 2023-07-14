@@ -90,7 +90,11 @@ def has_commits_ahead(repo: git.Repo) -> bool:
         return False
 
     else:
-        return len(repo.index.diff(None)) > 0
+        current_branch = repo.active_branch.name
+        remote_branch = f"origin/{current_branch}"
+
+        commits = list(repo.iter_commits(f"{current_branch}..{remote_branch}"))
+        return len(commits) > 0
 
 
 def get_current_commit_hash(repo: git.Repo) -> str:
