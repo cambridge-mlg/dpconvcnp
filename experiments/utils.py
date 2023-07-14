@@ -2,6 +2,7 @@ from typing import Tuple, Any, Dict
 import argparse
 import os
 import json
+import yaml
 from omegaconf import OmegaConf, DictConfig
 from hydra.utils import instantiate
 from datetime import datetime
@@ -75,10 +76,10 @@ def initialize_experiment() -> Tuple[DictConfig, str, Writer]:
     writer = Writer(f"{path}/logs")
 
     # Write config to file together with commit hash
-    with open(f"{path}/config.json", "w") as file:
+    with open(f"{path}/config.yml", "w") as file:
         config = OmegaConf.to_container(config)
         config.update({"commit_hash": get_current_commit_hash(repo)})
-        json.dump(config, file, indent=4)
+        yaml.dump(config, file, indent=4)
 
     return experiment, path, writer
 
