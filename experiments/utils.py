@@ -74,17 +74,18 @@ def initialize_experiment() -> Tuple[DictConfig, str, Writer]:
     path = make_experiment_path(experiment)
     writer = Writer(f"{path}/logs")
 
-    # Write config to file
+    # Write config to file together with commit hash
     with open(f"{path}/config.json", "w") as file:
         config = OmegaConf.to_container(config)
         config.update({"commit_hash": get_current_commit_hash(repo)})
-        json.dump(config, file)
+        json.dump(config, file, indent=4)
 
     return experiment, path, writer
 
 
 def has_commits_ahead(repo: git.Repo) -> bool:
-    if repo.head.is_detached and not repo.is_dirty():
+    if repo.head.is_detached:
+        assert not repo.is_dirty(), "Repo is dirty, please commit changes."
         return False
 
     else:
