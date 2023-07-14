@@ -20,6 +20,7 @@ class UNet(tf.Module):
 
     def __init__(
             self,
+            *,
             first_channels: int,
             last_channels: int,
             kernel_size: int,

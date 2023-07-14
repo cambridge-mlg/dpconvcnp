@@ -53,3 +53,7 @@ params:
   generator_seed: [0, 0]
   architecture_seed: 1
   experiment_seed: [0, 2]
+
+misc:
+  results_root: _experiments
+  experiment_name: null
