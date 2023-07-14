@@ -57,17 +57,22 @@ def train_step(
 
 def initialize_experiment() -> Tuple[DictConfig, str, Writer]:
 
+    # Make argument parser with just the config argument
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--config", type=str)
+    parser.add_argument("--debug", action="store_true")
+    args = parser.parse_args()
+
     # Create a repo object and check if local repo is clean
     repo = git.Repo(search_parent_directories=True)
 
     # Check that the repo is clean
-    assert not repo.is_dirty(), "Repo is dirty, please commit changes."
-    assert not has_commits_ahead(repo), "Repo has commits ahead, please push changes."
-
-    # Make argument parser with just the config argument
-    parser = argparse.ArgumentParser()
-    parser.add_argument("--config", type=str)
-    args = parser.parse_args()
+    assert args.debug or not repo.is_dirty(), (
+        "Repo is dirty, please commit changes."
+    )
+    assert args.debug or not has_commits_ahead(repo), (
+        "Repo has commits ahead, please push changes."
+    )
 
     # Initialise experiment, make path and writer
     config = OmegaConf.load(args.config) 
