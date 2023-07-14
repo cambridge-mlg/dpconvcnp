@@ -94,6 +94,7 @@ def has_commits_ahead(repo: git.Repo) -> bool:
         remote_branch = f"origin/{current_branch}"
 
         commits = list(repo.iter_commits(f"{current_branch}..{remote_branch}"))
+        breakpoint()
         return len(commits) > 0
 
 
