@@ -83,8 +83,8 @@ def initialize_experiment() -> Tuple[DictConfig, str, Writer]:
     # Write config to file together with commit hash
     with open(f"{path}/config.yml", "w") as file:
         config = OmegaConf.to_container(config)
-        config.update({"commit_hash": get_current_commit_hash(repo)})
-        yaml.dump(config, file, indent=4)
+        config.update({"commit": get_current_commit_hash(repo) if not args.debug else None})
+        yaml.dump(config, file, indent=4, sort_keys=False)
 
     return experiment, path, writer
 
