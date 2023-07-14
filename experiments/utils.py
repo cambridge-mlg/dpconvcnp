@@ -5,6 +5,7 @@ import json
 from omegaconf import OmegaConf, DictConfig
 from hydra.utils import instantiate
 from datetime import datetime
+import git
 
 import tensorflow as tf
 from tensorboard.summary import Writer
@@ -55,11 +56,16 @@ def train_step(
 
 def initialize_experiment() -> Tuple[DictConfig, str, Writer]:
 
+    # Create a repo object and check if local repo is clean
+    repo = git.Repo(search_parent_directories=True)
+
+    # Check that the repo is clean
+    assert not repo.is_dirty(), "Repo is dirty, please commit changes."
+    assert not has_commits_ahead(repo), "Repo has commits ahead, please push changes."
+
     # Make argument parser with just the config argument
     parser = argparse.ArgumentParser()
     parser.add_argument("--config", type=str)
-
-    # Parse the config argument and make OmegaConf object
     args = parser.parse_args()
 
     # Initialise experiment, make path and writer
@@ -71,17 +77,26 @@ def initialize_experiment() -> Tuple[DictConfig, str, Writer]:
     # Write config to file
     with open(f"{path}/config.json", "w") as file:
         config = OmegaConf.to_container(config)
-        json.dump(, file)
+        config.update({"commit_hash": get_current_commit_hash(repo)})
+        json.dump(config, file)
 
     return experiment, path, writer
 
 
-def add_git_info(config: Dict[str, Any]) -> Dict[str, Any]:
+def has_commits_ahead(repo: git.Repo) -> bool:
+    if repo.head.is_detached and not repo.is_dirty():
+        return False
 
-    config.misc.git_hash = subprocess.check_output(["git", "rev-parse", "HEAD"]).decode("utf-8").strip()
-    config.misc.git_branch = subprocess.check_output(["git", "rev-parse", "--abbrev-ref", "HEAD"]).decode("utf-8").strip()
+    else:
+        return len(repo.index.diff(None)) > 0
 
-    return config
+
+def get_current_commit_hash(repo: git.Repo) -> str:
+    if repo.head.is_detached:
+        return repo.commit(repo.head.object).hexsha
+
+    else:
+        return repo.head.commit.hexsha
 
 
 def make_experiment_path(experiment: DictConfig) -> str:
