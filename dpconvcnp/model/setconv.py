@@ -198,14 +198,6 @@ class DPSetConvEncoder(tf.Module):
         )  # shape (batch_size, num_grid_points,) 
 
         # Compute sensitivity per sigma
-        #sens_per_sigma = dp_sens_per_sigma(epsilon=epsilon, delta=delta)
-        #sens_per_sigma = to_tensor(
-        #    [
-        #        dp_numpy_sens_per_sigma(epsilon=e.numpy(), delta=d.numpy())
-        #        for e, d in zip(epsilon, delta)
-        #    ],
-        #    f64,
-        #)
         sens_per_sigma = dp_sens_per_sigma(epsilon=epsilon, delta=delta)
 
         tf.debugging.assert_all_finite(

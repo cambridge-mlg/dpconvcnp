@@ -2,7 +2,6 @@ from typing import Tuple
 import tensorflow as tf
 tfk = tf.keras
 
-
 CONV = {
     1: tfk.layers.Conv1D,
     2: tfk.layers.Conv2D,

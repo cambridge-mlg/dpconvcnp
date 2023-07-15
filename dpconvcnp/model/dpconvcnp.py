@@ -78,8 +78,6 @@ class DPConvCNP(tf.Module):
             x_trg=x_trg,
         )
 
-        assert z_trg.shape[-1] == 2
-
         mean = z_trg[..., :1]
         std = tf.math.softplus(z_trg[..., 1:])**0.5
 
