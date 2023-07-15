@@ -95,7 +95,7 @@ class DPConvCNP(tf.Module):
         y_trg: tf.Tensor,
         epsilon: tf.Tensor,
         delta: tf.Tensor,
-    ) -> Tuple[Seed, tf.Tensor]:
+    ) -> Tuple[Seed, tf.Tensor, tf.Tensor, tf.Tensor]:
 
         seed, mean, std = self.__call__(
             seed=seed,
@@ -107,5 +107,6 @@ class DPConvCNP(tf.Module):
         )
 
         log_prob = tfd.Normal(loc=mean, scale=std).log_prob(y_trg)
+        loss = - tf.reduce_sum(log_prob, axis=[1, 2])
 
-        return seed, - tf.reduce_sum(log_prob, axis=[1, 2])
+        return seed, loss, mean, std

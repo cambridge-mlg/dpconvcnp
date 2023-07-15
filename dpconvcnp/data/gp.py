@@ -123,8 +123,8 @@ class GPGenerator(SyntheticGenerator, ABC):
             else:
                 gt_log_lik = None
 
-            mean = cast(mean, dtype)
-            std = cast(std, dtype)
+            mean = cast(mean, dtype)[:, :, None]
+            std = cast(std, dtype)[:, :, None]
 
             return mean, std, gt_log_lik
 

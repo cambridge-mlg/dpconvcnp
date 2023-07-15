@@ -2,7 +2,7 @@
 import tensorflow as tf
 import tensorboard
 
-from utils import initialize_experiment, train_step
+from utils import initialize_experiment, train_step, valid_step
 
 log10 = tf.experimental.numpy.log10
 f32 = tf.float32
@@ -13,13 +13,14 @@ def main():
     experiment, path, writer = initialize_experiment()
 
     dpconvcnp = experiment.model
-    generator = experiment.generator
+    gen_train = experiment.generators.train
+    gen_valid = experiment.generators.valid
     optimizer = experiment.optimizer
     seed = experiment.params.experiment_seed
 
     c = 0
     for epoch in range(100):
-        for i, batch in enumerate(generator):
+        for i, batch in enumerate(gen_train):
             c += 1
             seed, loss = train_step(
                 seed=seed,
@@ -79,6 +80,13 @@ def main():
 
                 #plt.savefig(f"figs/{i}.png")
                 #plt.clf()
+
+        seed, result = valid_step(
+            seed=seed,
+            model=dpconvcnp,
+            generator=gen_valid,
+        )
+        writer.add_scalar("kl_diag", result["kl_diag"], epoch)
 
 
 if __name__ == "__main__":

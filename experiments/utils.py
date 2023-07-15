@@ -1,7 +1,6 @@
-from typing import Tuple, Any, Dict
+from typing import Tuple, Dict
 import argparse
 import os
-import json
 import yaml
 from omegaconf import OmegaConf, DictConfig
 from hydra.utils import instantiate
@@ -9,11 +8,15 @@ from datetime import datetime
 import git
 
 import tensorflow as tf
+import tensorflow_probability as tfp
 from tensorboard.summary import Writer
 import matplotlib.pyplot as plt
 
 from dpconvcnp.data.data import Batch
 from dpconvcnp.random import Seed
+from dpconvcnp.data.data import DataGenerator
+
+tfd = tfp.distributions
 
 
 def train_step(
@@ -38,7 +41,7 @@ def train_step(
 
 
     with tf.GradientTape() as tape:
-        seed, loss = model.loss(
+        seed, loss, _, _ = model.loss(
             seed=seed,
             x_ctx=batch.x_ctx,
             y_ctx=batch.y_ctx,
@@ -55,7 +58,94 @@ def train_step(
     return seed, loss
 
 
+def valid_step(
+    seed: Seed,
+    model: tf.Module,
+    generator: DataGenerator,
+) -> Tuple[Seed, Dict[str, tf.Tensor]]:
+    
+    result = {
+        "kl_diag": [],
+        "loss": [],
+        "pred_mean": [],
+        "pred_std": [],
+        "gt_mean": [],
+        "gt_std": [],
+    }
+
+    for batch in generator:
+        seed, loss, mean, std = model.loss(
+            seed=seed,
+            x_ctx=batch.x_ctx,
+            y_ctx=batch.y_ctx,
+            x_trg=batch.x_trg,
+            y_trg=batch.y_trg,
+            epsilon=batch.epsilon,
+            delta=batch.delta,
+        )
+
+        gt_mean, gt_std, _ = batch.gt_pred(
+            x_ctx=batch.x_ctx,
+            y_ctx=batch.y_ctx,
+            x_trg=batch.x_trg,
+            y_trg=batch.y_trg,
+        )
+
+        result["loss"].append(tf.reduce_mean(loss) / batch.y_trg.shape[1])
+        result["pred_mean"].append(mean[:, :, 0])
+        result["pred_std"].append(std[:, :, 0])
+
+        result["gt_mean"].append(gt_mean[:, :, 0])
+        result["gt_std"].append(gt_std[:, :, 0])
+
+        result["kl_diag"].append(
+            tf.reduce_sum(
+                gauss_gauss_kl_diag(
+                    mean_1=mean,
+                    std_1=std,
+                    mean_2=gt_mean,
+                    std_2=gt_std,
+                )
+            )
+        )
+
+    return seed, result
+    
+
+def gauss_gauss_kl_diag(
+    mean_1: tf.Tensor,
+    std_1: tf.Tensor,
+    mean_2: tf.Tensor,
+    std_2: tf.Tensor,
+) -> tf.Tensor:
+    """Compute the KL divergence between two diagonal Gaussians.
+
+    Arguments:
+        mean_1: mean of first Gaussian.
+        std_1: standard deviation of first Gaussian.
+        mean_2: mean of second Gaussian.
+        std_2: standard deviation of second Gaussian.
+
+    Returns:
+        kl: KL divergence between the two Gaussians.
+    """
+
+    dist_1 = tfd.Normal(loc=mean_1, scale=std_1)
+    dist_2 = tfd.Normal(loc=mean_2, scale=std_2)
+
+    return tfd.kl_divergence(dist_1, dist_2)
+
+
 def initialize_experiment() -> Tuple[DictConfig, str, Writer]:
+    """Initialise experiment by parsing the config file, checking that the
+    repo is clean, creating a path for the experiment, and creating a
+    writer for tensorboard.
+
+    Returns:
+        experiment: experiment config object.
+        path: path to experiment.
+        writer: tensorboard writer.
+    """
 
     # Make argument parser with just the config argument
     parser = argparse.ArgumentParser()
@@ -82,14 +172,23 @@ def initialize_experiment() -> Tuple[DictConfig, str, Writer]:
 
     # Write config to file together with commit hash
     with open(f"{path}/config.yml", "w") as file:
+        hash = get_current_commit_hash(repo) if not args.debug else None
         config = OmegaConf.to_container(config)
-        config.update({"commit": get_current_commit_hash(repo) if not args.debug else None})
+        config.update({"commit": hash})
         yaml.dump(config, file, indent=4, sort_keys=False)
 
     return experiment, path, writer
 
 
 def has_commits_ahead(repo: git.Repo) -> bool:
+    """Check if there are commits ahead in the local current branch.
+    
+    Arguments:
+        repo: git repo object.
+
+    Returns:
+        has_commits_ahead: True if there are commits ahead, False otherwise.
+    """
     if repo.head.is_detached:
         assert not repo.is_dirty(), "Repo is dirty, please commit changes."
         return False
@@ -101,6 +200,14 @@ def has_commits_ahead(repo: git.Repo) -> bool:
 
 
 def get_current_commit_hash(repo: git.Repo) -> str:
+    """Get the current commit hash of the local repo.
+
+    Arguments:
+        repo: git repo object.
+
+    Returns:
+        commit_hash: current commit hash.
+    """
     if repo.head.is_detached:
         return repo.commit(repo.head.object).hexsha
 

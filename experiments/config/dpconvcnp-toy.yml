@@ -1,23 +1,45 @@
-generator:
-  _target_: dpconvcnp.data.gp.RandomScaleGPGenerator
-  seed: ${params.generator_seed}
-  dim: ${params.dim}
-  kernel_type: eq
-  min_log10_lengthscale: -0.602
-  max_log10_lengthscale: -0.602
-  noise_std: 0.2
-  min_num_ctx: 1
-  max_num_ctx: 256
-  min_num_trg: 256
-  max_num_trg: 256
-  context_range: [[-2.0, 2.0]]
-  target_range: [[-4.0, 4.0]]
-  samples_per_epoch: 65536
-  batch_size: 16
-  min_epsilon: 3
-  max_epsilon: 3
-  min_log10_delta: -3
-  max_log10_delta: -3
+generators:
+  train:
+    _target_: dpconvcnp.data.gp.RandomScaleGPGenerator
+    seed: ${params.generator_train_seed}
+    dim: ${params.dim}
+    kernel_type: eq
+    min_log10_lengthscale: -0.602
+    max_log10_lengthscale: -0.602
+    noise_std: 0.2
+    min_num_ctx: 1
+    max_num_ctx: 256
+    min_num_trg: 256
+    max_num_trg: 256
+    context_range: [[-2.0, 2.0]]
+    target_range: [[-4.0, 4.0]]
+    samples_per_epoch: 16 # 65536
+    batch_size: 16
+    min_epsilon: 3
+    max_epsilon: 3
+    min_log10_delta: -3
+    max_log10_delta: -3
+  valid:
+    _target_: dpconvcnp.data.gp.RandomScaleGPGenerator
+    seed: ${params.generator_valid_seed}
+    dim: ${params.dim}
+    kernel_type: eq
+    min_log10_lengthscale: -0.602
+    max_log10_lengthscale: -0.602
+    noise_std: 0.2
+    min_num_ctx: 1
+    max_num_ctx: 256
+    min_num_trg: 256
+    max_num_trg: 256
+    context_range: [[-2.0, 2.0]]
+    target_range: [[-4.0, 4.0]]
+    samples_per_epoch: 128 # 8192
+    batch_size: 16
+    min_epsilon: 3
+    max_epsilon: 3
+    min_log10_delta: -3
+    max_log10_delta: -3
+    reset_seed_at_epoch_end: true
 
 model:
   _target_: dpconvcnp.model.dpconvcnp.DPConvCNP
@@ -50,9 +72,10 @@ optimizer:
 
 params:
   dim: 1
-  generator_seed: [0, 0]
-  architecture_seed: 1
-  experiment_seed: [0, 2]
+  generator_train_seed: [0, 0]
+  generator_valid_seed: [0, 1]
+  architecture_seed: 2
+  experiment_seed: [0, 3]
 
 misc:
   results_root: _experiments

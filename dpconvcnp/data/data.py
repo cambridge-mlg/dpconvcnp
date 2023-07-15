@@ -1,6 +1,7 @@
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from typing import Tuple, Optional, Callable
+from copy import deepcopy
 
 import tensorflow as tf
 
@@ -161,6 +162,7 @@ class SyntheticGenerator(DataGenerator, ABC):
         max_num_trg: int,
         context_range: tf.Tensor,
         target_range: tf.Tensor,
+        reset_seed_at_epoch_end: bool = False,
         **kwargs,
     ):
 
@@ -174,6 +176,15 @@ class SyntheticGenerator(DataGenerator, ABC):
 
         self.context_range = to_tensor(context_range, f32)
         self.target_range = to_tensor(target_range, f32)
+
+        # Set epoch reset seed flag
+        self.base_seed = deepcopy(self.seed)
+        self.reset_seed_at_epoch_end = reset_seed_at_epoch_end
+
+    def __iter__(self):
+        """Reset epoch counter and seed and return self."""
+        self.seed = self.base_seed if self.reset_seed_at_epoch_end else self.seed
+        return super().__iter__()
 
     def generate_data(self, seed: Seed) -> Tuple[Seed, Batch]:
         """Generate batch of data using the random seed `seed`.
