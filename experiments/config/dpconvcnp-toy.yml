@@ -8,7 +8,7 @@ generators:
     max_log10_lengthscale: -0.602
     noise_std: 0.2
     min_num_ctx: 1
-    max_num_ctx: 256
+    max_num_ctx: 512
     min_num_trg: 256
     max_num_trg: 256
     context_range: [[-2.0, 2.0]]
@@ -28,7 +28,7 @@ generators:
     max_log10_lengthscale: -0.602
     noise_std: 0.2
     min_num_ctx: 1
-    max_num_ctx: 256
+    max_num_ctx: 512
     min_num_trg: 256
     max_num_trg: 256
     context_range: [[-2.0, 2.0]]
