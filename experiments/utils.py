@@ -101,10 +101,10 @@ def valid_step(
         result["kl_diag"].append(
             tf.reduce_mean(
                 gauss_gauss_kl_diag(
-                    mean_1=mean,
-                    std_1=std,
-                    mean_2=gt_mean,
-                    std_2=gt_std,
+                    mean_1=gt_mean,
+                    std_1=gt_std,
+                    mean_2=mean,
+                    std_2=std,
                 )
             )
         )
