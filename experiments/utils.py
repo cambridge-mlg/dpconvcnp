@@ -99,7 +99,7 @@ def valid_step(
         result["gt_std"].append(gt_std[:, :, 0])
 
         result["kl_diag"].append(
-            tf.reduce_sum(
+            tf.reduce_mean(
                 gauss_gauss_kl_diag(
                     mean_1=mean,
                     std_1=std,
