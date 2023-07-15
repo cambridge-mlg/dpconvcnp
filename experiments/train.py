@@ -1,11 +1,10 @@
 
 import tensorflow as tf
 import tensorboard
+from tqdm import tqdm
 
 from utils import initialize_experiment, train_step, valid_step
-
-log10 = tf.experimental.numpy.log10
-f32 = tf.float32
+from dpconvcnp.utils import to_tensor, i32
 
 
 def main():
@@ -16,11 +15,11 @@ def main():
     gen_train = experiment.generators.train
     gen_valid = experiment.generators.valid
     optimizer = experiment.optimizer
-    seed = experiment.params.experiment_seed
+    seed = to_tensor(experiment.params.experiment_seed, i32)
 
     c = 0
     for epoch in range(100):
-        for i, batch in enumerate(gen_train):
+        for i, batch in enumerate(tqdm(gen_train)):
             c += 1
             seed, loss = train_step(
                 seed=seed,

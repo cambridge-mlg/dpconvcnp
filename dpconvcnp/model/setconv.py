@@ -71,6 +71,7 @@ class DPSetConvEncoder(tf.Module):
     def density_sigma(self, sens_per_sigma: tf.Tensor) -> tf.Tensor:
         return 2**0.5 / (sens_per_sigma * (1 - self.w_noise) ** 0.5)
 
+    @tf.function(experimental_relax_shapes=True)
     def __call__(
             self,
             seed: Seed,
@@ -123,17 +124,13 @@ class DPSetConvEncoder(tf.Module):
             delta=delta,
         )
         
-        check_shape(
-            [z_grid_flat, noise],
-            [("B", "G", 2), ("B", "G", 2)],
-        )
-
         z_grid_flat = z_grid_flat + noise
+        #raise Exception(f"{z_grid_flat.shape=} {x_grid.shape=} {x_grid_flat.shape=}")
 
         # Reshape grid
         z_grid = tf.reshape(
             z_grid_flat,
-            shape=(x_grid.shape[0],) + x_grid.shape[1:-1] + (z_grid_flat.shape[-1],),
+            shape=tf.concat([tf.shape(x_grid)[:-1], tf.shape(z_grid_flat)[-1:]], axis=0),
         )  # shape (batch_size, n1, ..., ndim, 2)
 
         return seed, x_grid, z_grid
@@ -187,7 +184,7 @@ class DPSetConvEncoder(tf.Module):
             lengthscale=cast(self.lengthscale, dtype=f64),
         )
         kxx_chol = tf.linalg.cholesky(
-            kxx + tf.eye(kxx.shape[-1], dtype=kxx.dtype) * 1e-6
+            kxx + tf.eye(tf.shape(kxx)[-1], dtype=kxx.dtype) * 1e-6
         )
 
         # Draw noise samples for the density and data channels
@@ -203,16 +200,19 @@ class DPSetConvEncoder(tf.Module):
 
         # Compute sensitivity per sigma
         #sens_per_sigma = dp_sens_per_sigma(epsilon=epsilon, delta=delta)
-        sens_per_sigma = to_tensor(
-            [
-                dp_numpy_sens_per_sigma(epsilon=e.numpy(), delta=d.numpy())
-                for e, d in zip(epsilon, delta)
-            ],
-            f64,
-        )
+        #sens_per_sigma = to_tensor(
+        #    [
+        #        dp_numpy_sens_per_sigma(epsilon=e.numpy(), delta=d.numpy())
+        #        for e, d in zip(epsilon, delta)
+        #    ],
+        #    f64,
+        #)
+        sens_per_sigma = dp_sens_per_sigma(epsilon=epsilon, delta=delta)
 
-        assert ~tf.reduce_any(tf.math.is_nan(sens_per_sigma))
-        assert ~tf.reduce_any(tf.math.is_inf(sens_per_sigma))
+        tf.debugging.assert_all_finite(
+            sens_per_sigma,
+            message="sens_per_sigma contains NaNs or inf.",
+        )
 
         # Convert back to input data types
         data_noise = cast(data_noise, dtype=in_dtype)
@@ -250,6 +250,7 @@ class SetConvDecoder(tf.Module):
     def lengthscale(self) -> tf.Tensor:
         return tf.exp(self.log_lengthscale)
     
+    @tf.function(experimental_relax_shapes=True)
     def __call__(
             self,
             x_grid: tf.Tensor,
@@ -302,24 +303,27 @@ def make_discretisation_grid(
         Tensor of shape (batch_size, n1, n2, ..., ndim, dim)
     """
 
+    # Number of dimensions of the grid
+    dim = x.shape[-1]
+
     # Compute min and max of each dimension
     x_min = tf.reduce_min(x, axis=1)  # shape (batch_size, dim)
     x_max = tf.reduce_max(x, axis=1)  # shape (batch_size, dim)
 
     # Compute half the number of points in each dimension
-    num_half_points = tf.math.ceil(
+    N = tf.math.ceil(
         (0.5 * (x_max - x_min) + margin) * points_per_unit
     )  # shape (batch_size, dim)
 
     # Take the maximum over the batch, in order to use the same number of 
     # points across all tasks in the batch, in order to enable tensor batching
-    num_half_points = tf.reduce_max(num_half_points, axis=0)  # shape (dim,)
-    num_half_points = 2**tf.math.ceil(tf.math.log(num_half_points) / tf.math.log(2.))  # shape (dim,)
+    N = tf.reduce_max(N, axis=0)  # shape (dim,)
+    N = 2**tf.math.ceil(tf.math.log(N) / tf.math.log(2.))  # shape (dim,)
 
     # Compute the discretisation grid
     grid = tf.stack(
         tf.meshgrid(
-            *[tf.range(-num, num, dtype=x.dtype) for num in num_half_points]
+            *[tf.range(-N[i], N[i], dtype=x.dtype) for i in range(dim)]
         ),
         axis=-1,
     )  # shape (n1, n2, ..., ndim, dim)
@@ -327,10 +331,12 @@ def make_discretisation_grid(
     # Compute midpoints of each dimeension and expand the midpoint tensor
     # to match the number of dimensions in the grid
     x_mid = 0.5 * (x_min + x_max)  # shape (batch_size, dim)
-    x_mid = tf.reshape(
-        x_mid,
-        shape=(x.shape[0],) + (1,) * x.shape[2] + (x.shape[2],),
-    )  # shape (batch_size, 1, 1, ..., 1, dim)
+    for _ in range(dim):
+        x_mid = tf.expand_dims(x_mid, axis=1)
+    #x_mid = tf.reshape(
+    #    x_mid,
+    #    shape=tf.concat([tf.shape(x)[0]] + [[1]] * dim + [tf.shape(x)[2]], axis=0),
+    #)  # shape (batch_size, 1, 1, ..., 1, dim)
 
     # Multiply integer grid by the grid spacing and add midpoint
     grid = x_mid + grid[None, ...] / points_per_unit
@@ -348,8 +354,7 @@ def flatten_grid(grid: tf.Tensor) -> tf.Tensor:
     Returns:
         Tensor of shape (batch_size, num_grid_points, dim)
     """
-
-    return tf.reshape(grid, shape=(grid.shape[0], -1, grid.shape[-1]))
+    return tf.reshape(grid, shape=(tf.shape(grid)[0], -1, tf.shape(grid)[-1]))
 
 
 def compute_eq_weights(

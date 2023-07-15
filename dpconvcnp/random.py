@@ -97,7 +97,9 @@ def randn(
     assert mean.dtype == stddev.dtype, "mean and stddev must have the same dtype"
     assert mean.dtype in [tf.float32, tf.float64], f"Invalid dtype: {mean.dtype=}"
     
-    seed, next_seed = tf.random.split(seed, num=2)
+    split = tf.random.split(seed, num=2)
+    seed = split[0]
+    next_seed = split[1]
 
     return next_seed, tf.random.stateless_normal(
         shape=shape,
@@ -157,11 +159,13 @@ def mvn_chol(
     assert mean.dtype in [tf.float32, tf.float64], f"Invalid dtype: {mean.dtype=}"
 
     # Split seed
-    seed, next_seed = tf.random.split(seed, num=2)
+    split = tf.random.split(seed, num=2)
+    seed = split[0]
+    next_seed = split[1]
 
     # Generate random normals
     seed, rand = randn(
-        shape=mean.shape,
+        shape=tf.shape(mean),
         seed=seed,
         mean=to_tensor(0.0, mean.dtype),
         stddev=to_tensor(1.0, mean.dtype),
@@ -195,7 +199,7 @@ def zero_mean_mvn(
     """
 
     # Create mean of zeroes
-    mean = tf.zeros(shape=cov.shape[:-1], dtype=cov.dtype)
+    mean = tf.zeros(shape=tf.shape(cov)[:-1], dtype=cov.dtype)
 
     return zero_mean_mvn_chol(seed=seed, cov_chol=tf.linalg.cholesky(cov))
 
@@ -216,6 +220,6 @@ def zero_mean_mvn_chol(
     """
 
     # Create mean of zeroes
-    mean = tf.zeros(shape=cov_chol.shape[:-1], dtype=cov_chol.dtype)
+    mean = tf.zeros(shape=tf.shape(cov_chol)[:-1], dtype=cov_chol.dtype)
 
     return mvn_chol(seed=seed, mean=mean, cov_chol=cov_chol)

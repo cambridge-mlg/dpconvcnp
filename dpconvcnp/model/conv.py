@@ -104,6 +104,7 @@ class UNet(tf.Module):
             )
 
 
+    @tf.function
     def __call__(self, z: tf.Tensor):
 
         z = self.first(z)

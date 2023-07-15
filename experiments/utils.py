@@ -10,7 +10,7 @@ import git
 import tensorflow as tf
 import tensorflow_probability as tfp
 from tensorboard.summary import Writer
-import matplotlib.pyplot as plt
+from tqdm import tqdm
 
 from dpconvcnp.data.data import Batch
 from dpconvcnp.random import Seed
@@ -73,7 +73,7 @@ def valid_step(
         "gt_std": [],
     }
 
-    for batch in generator:
+    for batch in tqdm(generator, total=generator.num_batches, desc="Validation:"):
         seed, loss, mean, std = model.loss(
             seed=seed,
             x_ctx=batch.x_ctx,
