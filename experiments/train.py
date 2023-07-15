@@ -24,7 +24,12 @@ def main():
             seed, loss = train_step(
                 seed=seed,
                 model=dpconvcnp,
-                batch=batch,
+                x_ctx=batch.x_ctx,
+                y_ctx=batch.y_ctx,
+                x_trg=batch.x_trg,
+                y_trg=batch.y_trg,
+                epsilon=batch.epsilon,
+                delta=batch.delta,
                 optimizer=optimizer,
             )
 

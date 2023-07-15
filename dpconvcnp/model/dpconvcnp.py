@@ -50,7 +50,7 @@ class DPConvCNP(tf.Module):
 
         self.conv_net = conv_net
 
-        
+
     def __call__(
         self,
         seed: Seed,
