@@ -19,10 +19,16 @@ from dpconvcnp.data.data import DataGenerator
 tfd = tfp.distributions
 
 
+@tf.function(experimental_relax_shapes=True) 
 def train_step(
     seed: Seed,
     model: tf.Module,
-    batch: Batch,
+    x_ctx: tf.Tensor,
+    y_ctx: tf.Tensor,
+    x_trg: tf.Tensor,
+    y_trg: tf.Tensor,
+    epsilon: tf.Tensor,
+    delta: tf.Tensor,
     optimizer: tf.optimizers.Optimizer,
 ) -> Tuple[Seed, tf.Tensor]:
     """Perform a single training step, returning the updateed seed and
@@ -43,14 +49,14 @@ def train_step(
     with tf.GradientTape() as tape:
         seed, loss, _, _ = model.loss(
             seed=seed,
-            x_ctx=batch.x_ctx,
-            y_ctx=batch.y_ctx,
-            x_trg=batch.x_trg,
-            y_trg=batch.y_trg,
-            epsilon=batch.epsilon,
-            delta=batch.delta,
+            x_ctx=x_ctx,
+            y_ctx=y_ctx,
+            x_trg=x_trg,
+            y_trg=y_trg,
+            epsilon=epsilon,
+            delta=delta,
         )
-        loss = tf.reduce_mean(loss) / batch.y_trg.shape[1]
+        loss = tf.reduce_mean(loss) / y_trg.shape[1]
 
     gradients = tape.gradient(loss, model.trainable_variables)
     optimizer.apply_gradients(zip(gradients, model.trainable_variables))

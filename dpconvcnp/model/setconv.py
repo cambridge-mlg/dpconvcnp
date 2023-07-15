@@ -71,7 +71,6 @@ class DPSetConvEncoder(tf.Module):
     def density_sigma(self, sens_per_sigma: tf.Tensor) -> tf.Tensor:
         return 2**0.5 / (sens_per_sigma * (1 - self.w_noise) ** 0.5)
 
-    @tf.function(experimental_relax_shapes=True)
     def __call__(
             self,
             seed: Seed,
@@ -250,7 +249,6 @@ class SetConvDecoder(tf.Module):
     def lengthscale(self) -> tf.Tensor:
         return tf.exp(self.log_lengthscale)
     
-    @tf.function(experimental_relax_shapes=True)
     def __call__(
             self,
             x_grid: tf.Tensor,
