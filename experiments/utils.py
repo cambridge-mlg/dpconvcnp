@@ -109,6 +109,8 @@ def valid_step(
             )
         )
 
+    result = {key: tf.reduce_mean(value) for key, value in result.items()}
+
     return seed, result
     
 
