@@ -1,6 +1,5 @@
 
 import tensorflow as tf
-import tensorboard
 from tqdm import tqdm
 
 from utils import initialize_experiment, train_step, valid_step
