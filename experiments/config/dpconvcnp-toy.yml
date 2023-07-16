@@ -13,7 +13,7 @@ generators:
     max_num_trg: 256
     context_range: [[-2.0, 2.0]]
     target_range: [[-4.0, 4.0]]
-    samples_per_epoch: 64 # 16384
+    samples_per_epoch: 16384
     batch_size: 16
     min_epsilon: 3
     max_epsilon: 3
@@ -33,7 +33,7 @@ generators:
     max_num_trg: 256
     context_range: [[-2.0, 2.0]]
     target_range: [[-4.0, 4.0]]
-    samples_per_epoch: 64 # 4096
+    samples_per_epoch: 4096
     batch_size: 16
     min_epsilon: 3
     max_epsilon: 3
