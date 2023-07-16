@@ -69,7 +69,7 @@ def valid_step(
     model: tf.Module,
     generator: DataGenerator,
 ) -> Tuple[Seed, Dict[str, tf.Tensor]]:
-    
+
     result = {
         "kl_diag": [],
         "loss": [],

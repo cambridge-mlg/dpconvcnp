@@ -84,6 +84,7 @@ class DPConvCNP(tf.Module):
         return seed, mean, std
 
 
+    @tf.function(experimental_relax_shapes=True) 
     def loss(
         self,
         seed: Seed,
