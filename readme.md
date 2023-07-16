@@ -5,6 +5,7 @@ To do
 - Add installation instructions
 - Clean up plotting, move this to utils
 - Fix randomness seed for validation (same noise for all validation epochs)
+- Add graph mode to entire validation (including ground truth computation)
 - Train two models with:
     - Two different lengthscale initialisations
     - Batch size 16 
