@@ -138,7 +138,7 @@ def plot(
 
             plt.legend(loc="upper right", fontsize=14)
             plt.savefig(f"{path}/fig/epoch-{epoch:04d}-{i:03d}.png")
-            plt.clf()
+            plt.close()
     
     else:
         raise NotImplementedError
