@@ -428,8 +428,8 @@ def plot(
             plt.xticks(fontsize=18)
             plt.yticks(fontsize=18)
 
-            plt.legend(loc="upper right", fontsize=18)
-            plt.savefig(f"{path}/fig/epoch-{epoch:05d}-{i:03d}.png")
+            plt.legend(loc="upper right", fontsize=14)
+            plt.savefig(f"{path}/fig/epoch-{epoch:04d}-{i:03d}.png")
             plt.clf()
     
     else:
@@ -437,8 +437,6 @@ def plot(
     
 
 def get_batch_info(batch: Batch, idx: int) -> tf.Tensor:
-    """
-    """
 
     n = batch.x_ctx.shape[1]
     epsilon = batch.epsilon[idx].numpy()
