@@ -1,9 +1,9 @@
 To do
 
+- Fix logs
 - Add `requirements.txt`
 - Add installation instructions
 - Clean up plotting, move this to utils
-- Add graph mode to entire validation (including ground truth computation)
 - Train two models with:
     - Two different lengthscale initialisations
     - Batch size 16 

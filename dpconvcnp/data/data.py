@@ -9,6 +9,14 @@ from dpconvcnp.random import Seed, randint, randu
 from dpconvcnp.utils import f32, i32, to_tensor
 
 
+class GroundTruthPredictor(ABC):
+
+    def __init__(self):
+        pass
+
+    def __call__(self):
+        raise NotImplementedError
+
 @dataclass
 class Batch:
 
@@ -25,8 +33,11 @@ class Batch:
 
     gt_mean: Optional[tf.Tensor] = None
     gt_std: Optional[tf.Tensor] = None
+
     gt_log_lik: Optional[tf.Tensor] = None
-    gt_pred: Optional[Callable] = None
+    gt_pred: Optional[GroundTruthPredictor] = None
+
+    gt_lengthscale: Optional[tf.Tensor] = None
 
 
 class DataGenerator(ABC):

@@ -1,22 +1,29 @@
-from typing import Tuple, Dict
+from typing import Tuple, Dict, List
 import argparse
 import os
 import yaml
 from omegaconf import OmegaConf, DictConfig
 from hydra.utils import instantiate
 from datetime import datetime
+from io import FileIO
 import git
 
 import tensorflow as tf
 import tensorflow_probability as tfp
 from tensorboard.summary import Writer
 from tqdm import tqdm
+import numpy as np
+import matplotlib.pyplot as plt
+import matplotlib
 
-from dpconvcnp.data.data import Batch
 from dpconvcnp.random import Seed
-from dpconvcnp.data.data import DataGenerator
+from dpconvcnp.data.data import DataGenerator, Batch
+from dpconvcnp.utils import to_tensor, f32
 
 tfd = tfp.distributions
+
+matplotlib.rcParams['mathtext.fontset'] = 'stix'
+matplotlib.rcParams['font.family'] = 'STIXGeneral'
 
 
 @tf.function(experimental_relax_shapes=True) 
@@ -92,7 +99,7 @@ def train_epoch(
             optimizer=optimizer,
         )
 
-        writer.add_scalar("loss", loss, step)
+        writer.add_scalar("train/loss", loss, step)
         writer.add_scalar("lengthscale", model.dpsetconv_encoder.lengthscale, step)
         writer.add_scalar("y_bound", model.dpsetconv_encoder.y_bound, step)
         writer.add_scalar("w_noise", model.dpsetconv_encoder.w_noise, step)
@@ -104,11 +111,13 @@ def train_epoch(
     return seed, step
 
 
-def valid_step(
+def valid_epoch(
     seed: Seed,
     model: tf.Module,
     generator: DataGenerator,
-) -> Tuple[Seed, Dict[str, tf.Tensor]]:
+    writer: Writer,
+    epoch: int,
+) -> Tuple[Seed, Dict[str, tf.Tensor], List[Batch]]:
 
     result = {
         "kl_diag": [],
@@ -118,6 +127,8 @@ def valid_step(
         "gt_mean": [],
         "gt_std": [],
     }
+
+    batches = []
 
     for batch in tqdm(generator, total=generator.num_batches, desc="Validation"):
         seed, loss, mean, std = model.loss(
@@ -155,9 +166,15 @@ def valid_step(
             )
         )
 
-    result = {key: tf.reduce_mean(value) for key, value in result.items()}
+        batches.append(batch)
 
-    return seed, result
+    result["loss"] = tf.reduce_mean(result["loss"])
+    result["kl_diag"] = tf.reduce_mean(result["kl_diag"])
+
+    writer.add_scalar("val/loss", result["loss"], epoch)
+    writer.add_scalar("val/kl_diag", result["kl_diag"], epoch)
+
+    return seed, result, batches
     
 
 def gauss_gauss_kl_diag(
@@ -184,7 +201,7 @@ def gauss_gauss_kl_diag(
     return tfd.kl_divergence(dist_1, dist_2)
 
 
-def initialize_experiment() -> Tuple[DictConfig, str, Writer]:
+def initialize_experiment() -> Tuple[DictConfig, str, FileIO, Writer]:
     """Initialise experiment by parsing the config file, checking that the
     repo is clean, creating a path for the experiment, and creating a
     writer for tensorboard.
@@ -224,8 +241,10 @@ def initialize_experiment() -> Tuple[DictConfig, str, Writer]:
         config = OmegaConf.to_container(config)
         config.update({"commit": hash})
         yaml.dump(config, file, indent=4, sort_keys=False)
+    
+    stdout = open(f"{path}/stdout.txt", "w")
 
-    return experiment, path, writer
+    return experiment, path, stdout, writer
 
 
 def has_commits_ahead(repo: git.Repo) -> bool:
@@ -288,3 +307,150 @@ def make_experiment_path(experiment: DictConfig) -> str:
         raise ValueError(f"Path {path} already exists.")
 
     return path
+
+
+def plot(
+    path: str,
+    model: tf.Module,
+    seed: Seed,
+    epoch: int,
+    batches: List[Batch],
+    num_fig: int = 3,
+    figsize: Tuple[float, float] = (8., 6.),
+    x_range: Tuple[float, float] = (-5., 5.),
+    y_lim: Tuple[float, float] = (-3., 3.),
+    points_per_dim: int = 512,
+):
+
+    # Get dimension of input data
+    dim = batches[0].x_ctx.shape[-1]
+
+    # If path for figures does not exist, create it
+    os.makedirs(f"{path}/fig", exist_ok=True)
+
+    if dim == 1:
+
+        x_plot = np.linspace(x_range[0], x_range[1], points_per_dim)[None, :, None]
+        x_plot = to_tensor(x_plot, f32)
+
+        for i in range(num_fig):
+
+            # Use model to make predictions at x_plot
+            seed, mean, std = model(
+                seed=seed,
+                x_ctx=batches[i].x_ctx[:1],
+                y_ctx=batches[i].y_ctx[:1],
+                x_trg=x_plot[:1],
+                epsilon=batches[i].epsilon[:1],
+                delta=batches[i].delta[:1],
+            )
+
+            # Use ground truth to make predictions at x_plot
+            gt_mean, gt_std, _ = batches[i].gt_pred(
+                x_ctx=batches[i].x_ctx[:1],
+                y_ctx=batches[i].y_ctx[:1],
+                x_trg=x_plot[:1],
+            )
+            
+            # Make figure for plotting
+            plt.figure(figsize=figsize)
+
+            # Plot context and target points
+            plt.scatter(
+                batches[i].x_ctx[0, :, 0],
+                batches[i].y_ctx[0, :, 0],
+                c="k",
+                label="Context",
+                s=20,
+            )
+
+            plt.scatter(
+                batches[i].x_trg[0, :, 0],
+                batches[i].y_trg[0, :, 0],
+                c="r",
+                label="Target",
+                s=20,
+            )
+            
+            # Plot model predictions
+            plt.plot(
+                x_plot[0, :, 0],
+                mean[0, :, 0],
+                c="tab:blue",
+            )
+
+            plt.fill_between(
+                x_plot[0, :, 0],
+                mean[0, :, 0] - 2. * std[0, :, 0],
+                mean[0, :, 0] + 2. * std[0, :, 0],
+                color="tab:blue",
+                alpha=0.2,
+                label="Model",
+            )
+
+            # Plot ground truth
+            plt.plot(
+                x_plot[0, :, 0],
+                gt_mean[0, :],
+                "--",
+                color="tab:purple",
+            )
+
+            plt.plot(
+                x_plot[0, :, 0],
+                gt_mean[0, :] + 2 * gt_std[0, :],
+                "--",
+                color="tab:purple",
+            )
+
+            plt.plot(
+                x_plot[0, :, 0],
+                gt_mean[0, :] - 2 * gt_std[0, :],
+                "--",
+                color="tab:purple",
+                label="Ground truth",
+            )
+
+            # Set axis limits
+            plt.xlim(x_range)
+            plt.ylim(y_lim)
+
+            # Set title
+            info = get_batch_info(batches[i], 0)
+            plt.title(
+                f"$N = {info['n']}$   "
+                f"$\\epsilon$ = {info['epsilon']:.2f}  "
+                f"$N\\ell \\epsilon$ = {info['nle']:.0f}   "
+                f"$\\delta$ = {info['delta']:.3f}",
+                fontsize=24,
+            )
+
+            plt.xticks(fontsize=18)
+            plt.yticks(fontsize=18)
+
+            plt.legend(loc="upper right", fontsize=18)
+            plt.savefig(f"{path}/fig/epoch-{epoch:05d}-{i:03d}.png")
+            plt.clf()
+    
+    else:
+        raise NotImplementedError
+    
+
+def get_batch_info(batch: Batch, idx: int) -> tf.Tensor:
+    """
+    """
+
+    n = batch.x_ctx.shape[1]
+    epsilon = batch.epsilon[idx].numpy()
+    delta = batch.delta[idx].numpy()
+    lengthscale = batch.gt_pred.kernel.lengthscales.numpy()
+
+    info = {
+        "n": n,
+        "epsilon": epsilon,
+        "delta": delta,
+        "lengthscale": lengthscale,
+        "nle": n * lengthscale * epsilon,
+    }
+
+    return info
