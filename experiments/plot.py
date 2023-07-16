@@ -23,7 +23,7 @@ def plot(
     seed: Seed,
     epoch: int,
     batches: List[Batch],
-    num_fig: int = 3,
+    num_fig: int = 5,
     figsize: Tuple[float, float] = (8., 6.),
     x_range: Tuple[float, float] = (-5., 5.),
     y_lim: Tuple[float, float] = (-3., 3.),
