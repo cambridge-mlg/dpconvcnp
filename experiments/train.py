@@ -2,7 +2,7 @@
 import tensorflow as tf
 from tqdm import tqdm
 
-from utils import initialize_experiment, train_step, valid_step
+from utils import initialize_experiment, train_epoch, valid_step
 from dpconvcnp.utils import to_tensor, i32
 
 
@@ -14,48 +14,21 @@ def main():
     gen_train = experiment.generators.train
     gen_valid = experiment.generators.valid
     optimizer = experiment.optimizer
-    seed = to_tensor(experiment.params.experiment_seed, i32)
+    seed = to_tensor(experiment.params.training_seed, i32)
+    validation_seed = to_tensor(experiment.params.training_seed, i32)
+    step = 0
 
-    c = 0
     for epoch in range(100):
-        for i, batch in enumerate(tqdm(gen_train)):
-            c += 1
-            seed, loss = train_step(
-                seed=seed,
-                model=dpconvcnp,
-                x_ctx=batch.x_ctx,
-                y_ctx=batch.y_ctx,
-                x_trg=batch.x_trg,
-                y_trg=batch.y_trg,
-                epsilon=batch.epsilon,
-                delta=batch.delta,
-                optimizer=optimizer,
-            )
+        
+        seed, step = train_epoch(
+            seed=seed,
+            model=dpconvcnp,
+            generator=gen_train,
+            optimizer=optimizer,
+            writer=writer,
+            step=step,
+        )
 
-            writer.add_scalar("loss", loss, c)
-            writer.add_scalar("lengthscale", dpconvcnp.dpsetconv_encoder.lengthscale, c)
-            writer.add_scalar("y_bound", dpconvcnp.dpsetconv_encoder.y_bound, c)
-            writer.add_scalar("w_noise", dpconvcnp.dpsetconv_encoder.w_noise, c)
-
-            if i % 100 == 0:
-
-                x_ctx = batch.x_ctx[:1]
-                y_ctx = batch.y_ctx[:1]
-                x_trg = tf.linspace(-4., 4., 400)[None, :, None]
-                epsilon = batch.epsilon[:1]
-                delta = batch.delta[:1]
-
-                seed, mean, std = dpconvcnp(
-                    seed=seed,
-                    x_ctx=x_ctx,
-                    y_ctx=y_ctx,
-                    x_trg=x_trg,
-                    epsilon=epsilon,
-                    delta=delta,
-                )
-                #print(i, dpconvcnp.dpsetconv_encoder.lengthscale)
-                print(epoch, i, loss)
-                #print(i, -tf.reduce_mean(batch.gt_log_lik / args.max_num_trg))
 
                 #import matplotlib.pyplot as plt
                 #import numpy as np
@@ -84,8 +57,8 @@ def main():
                 #plt.savefig(f"figs/{i}.png")
                 #plt.clf()
 
-        seed, result = valid_step(
-            seed=seed,
+        _, result = valid_step(
+            seed=validation_seed,
             model=dpconvcnp,
             generator=gen_valid,
         )

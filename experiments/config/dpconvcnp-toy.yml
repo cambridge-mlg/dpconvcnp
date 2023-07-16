@@ -75,7 +75,8 @@ params:
   generator_train_seed: [0, 0]
   generator_valid_seed: [0, 1]
   architecture_seed: 2
-  experiment_seed: [0, 3]
+  training_seed: [0, 3]
+  validation_seed: [0, 4]
 
 misc:
   results_root: _experiments

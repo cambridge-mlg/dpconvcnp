@@ -64,6 +64,46 @@ def train_step(
     return seed, loss
 
 
+def train_epoch(
+    seed: Seed,
+    model: tf.Module,
+    generator: DataGenerator,
+    optimizer: tf.optimizers.Optimizer,
+    writer: Writer,
+    step: int,
+) -> Tuple[Seed, int]:
+
+    epoch = tqdm(
+        generator,
+        total=generator.num_batches,
+        desc="Training",
+    )
+
+    for batch in epoch:
+        seed, loss = train_step(
+            seed=seed,
+            model=model,
+            x_ctx=batch.x_ctx,
+            y_ctx=batch.y_ctx,
+            x_trg=batch.x_trg,
+            y_trg=batch.y_trg,
+            epsilon=batch.epsilon,
+            delta=batch.delta,
+            optimizer=optimizer,
+        )
+
+        writer.add_scalar("loss", loss, step)
+        writer.add_scalar("lengthscale", model.dpsetconv_encoder.lengthscale, step)
+        writer.add_scalar("y_bound", model.dpsetconv_encoder.y_bound, step)
+        writer.add_scalar("w_noise", model.dpsetconv_encoder.w_noise, step)
+
+        epoch.set_postfix(loss=f"{loss:.4f}]")
+
+        step = step + 1
+
+    return seed, step
+
+
 def valid_step(
     seed: Seed,
     model: tf.Module,
@@ -79,7 +119,7 @@ def valid_step(
         "gt_std": [],
     }
 
-    for batch in tqdm(generator, total=generator.num_batches, desc="Validation:"):
+    for batch in tqdm(generator, total=generator.num_batches, desc="Validation"):
         seed, loss, mean, std = model.loss(
             seed=seed,
             x_ctx=batch.x_ctx,
