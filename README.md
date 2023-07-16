@@ -3,7 +3,6 @@ To do
 - Fix logs
 - Add `requirements.txt`
 - Add installation instructions
-- Clean up plotting, move this to utils
 - Train two models with:
     - Two different lengthscale initialisations
     - Batch size 16 

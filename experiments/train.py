@@ -1,6 +1,7 @@
 import sys
 
-from utils import initialize_experiment, train_epoch, valid_epoch, plot
+from utils import initialize_experiment, train_epoch, valid_epoch
+from plot import plot
 from dpconvcnp.utils import to_tensor, i32
 
 
