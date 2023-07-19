@@ -43,11 +43,11 @@ generators:
 
 model:
   _target_: dpconvcnp.model.dpconvcnp.DPConvCNP
-  dpsetconv_encoder: ${dpsetconv_encoder}
+  dpsetconv_encoder: ${dpsetconv}
   conv_net: ${conv_net}
-  setconv_decoder: ${setconv_decoder}
+  setconv_decoder: ${setconv}
 
-dpsetconv_encoder:
+dpsetconv:
   _target_: dpconvcnp.model.setconv.DPSetConvEncoder
   seed: ${params.dpsetconv_seed}
   points_per_unit: ${params.points_per_unit}
@@ -73,7 +73,7 @@ conv_net:
   seed: ${params.architecture_seed}
   activation: relu
 
-setconv_decoder:
+setconv:
   _target_: dpconvcnp.model.setconv.SetConvDecoder
   lengthscale_init: 0.1
   lengthscale_trainable: true
