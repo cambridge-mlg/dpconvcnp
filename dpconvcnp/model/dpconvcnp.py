@@ -13,43 +13,18 @@ class DPConvCNP(tf.Module):
 
     def __init__(
         self,
-        dim: int,
-        points_per_unit: int,
-        margin: float,
-        lengthscale_init: float,
-        y_bound_init: float,
-        w_noise_init: float,
-        encoder_lengthscale_trainable: bool,
-        decoder_lengthscale_trainable: bool,
-        y_bound_trainable: bool,
-        w_noise_trainable: bool,
         conv_net: tf.Module,
-        dtype: tf.DType = tf.float32,
+        dpsetconv_encoder: DPSetConvEncoder,
+        setconv_decoder: SetConvDecoder,
         name: str = "dpconvcp",
         **kwargs,
     ):
         super().__init__(name=name, **kwargs)
 
-        self.dpsetconv_encoder = DPSetConvEncoder(
-            points_per_unit=points_per_unit,
-            margin=margin,
-            lengthscale_init=lengthscale_init,
-            y_bound_init=y_bound_init,
-            w_noise_init=w_noise_init,
-            lengthscale_trainable=encoder_lengthscale_trainable,
-            y_bound_trainable=y_bound_trainable,
-            w_noise_trainable=w_noise_trainable,
-            dtype=dtype,
-        )
-
-        self.setconv_decoder = SetConvDecoder(
-            lengthscale_init=lengthscale_init,
-            trainable=decoder_lengthscale_trainable,
-            scaling_factor=points_per_unit**dim,
-        )
-
+        self.dpsetconv_encoder = dpsetconv_encoder
+        self.setconv_decoder = setconv_decoder
         self.conv_net = conv_net
-
+        
 
     def __call__(
         self,

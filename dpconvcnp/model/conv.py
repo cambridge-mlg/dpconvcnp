@@ -102,7 +102,6 @@ class UNet(tf.Module):
                 **shared_kwargs(last_channels, kernel_size, 1, None, seed)
             )
 
-
     def __call__(self, z: tf.Tensor):
 
         z = self.first(z)

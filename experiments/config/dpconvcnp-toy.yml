@@ -43,17 +43,24 @@ generators:
 
 model:
   _target_: dpconvcnp.model.dpconvcnp.DPConvCNP
-  dim: ${params.dim}
-  points_per_unit: 32
+  dpsetconv_encoder: ${dpsetconv_encoder}
+  conv_net: ${conv_net}
+  setconv_decoder: ${setconv_decoder}
+
+dpsetconv_encoder:
+  _target_: dpconvcnp.model.setconv.DPSetConvEncoder
+  seed: ${params.dpsetconv_seed}
+  points_per_unit: ${params.points_per_unit}
   margin: 0.1
   lengthscale_init: 0.1
   y_bound_init: 2.0
   w_noise_init: 0.5
-  encoder_lengthscale_trainable: true
-  decoder_lengthscale_trainable: true
+  lengthscale_trainable: true
   y_bound_trainable: true
   w_noise_trainable: true
-  conv_net: ${conv_net}
+  amortize_y_bound: false
+  amortize_w_noise: false
+  num_mlp_hidden_units: 32
 
 conv_net:
   _target_: dpconvcnp.model.conv.UNet
@@ -66,17 +73,25 @@ conv_net:
   seed: ${params.architecture_seed}
   activation: relu
 
+setconv_decoder:
+  _target_: dpconvcnp.model.setconv.SetConvDecoder
+  lengthscale_init: 0.1
+  lengthscale_trainable: true
+  scaling_factor: ${eval:'${params.points_per_unit} ** ${params.dim}'}
+    
 optimizer:
   _target_: tensorflow.keras.optimizers.Adam
   learning_rate: 5e-4
 
 params:
   dim: 1
+  points_per_unit: 32
   generator_train_seed: [0, 0]
-  generator_valid_seed: [0, 1]
-  architecture_seed: 2
-  training_seed: [0, 3]
-  validation_seed: [0, 4]
+  generator_valid_seed: [0, 10]
+  architecture_seed: 20
+  dpsetconv_seed: 30
+  training_seed: [0, 40]
+  validation_seed: [0, 50]
 
 misc:
   results_root: _experiments

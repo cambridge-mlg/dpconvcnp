@@ -94,8 +94,12 @@ def train_epoch(
 
         writer.add_scalar("train/loss", loss, step)
         writer.add_scalar("lengthscale", model.dpsetconv_encoder.lengthscale, step)
-        writer.add_scalar("y_bound", model.dpsetconv_encoder.y_bound, step)
-        writer.add_scalar("w_noise", model.dpsetconv_encoder.w_noise, step)
+        
+        if not model.dpsetconv_encoder.amortize_y_bound:
+            writer.add_scalar("y_bound", model.dpsetconv_encoder.y_bound(None)[0, 0], step)
+
+        if not model.dpsetconv_encoder.amortize_w_noise:
+            writer.add_scalar("w_noise", model.dpsetconv_encoder.w_noise(None)[0, 0], step)
 
         epoch.set_postfix(loss=f"{loss:.4f}]")
 
@@ -223,6 +227,7 @@ def initialize_experiment() -> Tuple[DictConfig, str, FileIO, Writer]:
     )
 
     # Initialise experiment, make path and writer
+    OmegaConf.register_new_resolver("eval", eval)
     config = OmegaConf.load(args.config) 
     experiment = instantiate(config)
     path = make_experiment_path(experiment)

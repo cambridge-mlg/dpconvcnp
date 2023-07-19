@@ -3,13 +3,14 @@ from typing import Tuple
 import tensorflow as tf
 from check_shape import check_shape
 
-from dpconvcnp.random import zero_mean_mvn_chol
+from dpconvcnp.random import zero_mean_mvn_chol, randint
 from dpconvcnp.random import Seed
-from dpconvcnp.utils import f64, cast, logit, to_tensor
+from dpconvcnp.utils import f64, cast, logit
 from dpconvcnp.model.privacy_accounting import (
     sens_per_sigma as dp_sens_per_sigma,
-    numpy_sens_per_sigma as dp_numpy_sens_per_sigma,
 )
+
+tfkl = tf.keras.layers
 
 
 class DPSetConvEncoder(tf.Module):
@@ -17,14 +18,18 @@ class DPSetConvEncoder(tf.Module):
     def __init__(
         self,
         *,
+        seed: int,
         points_per_unit: int,
         lengthscale_init: float,
         y_bound_init: float,
         w_noise_init: float,
         margin: float,
-        lengthscale_trainable: bool = True,
-        y_bound_trainable: bool = True,
-        w_noise_trainable: bool = True,
+        lengthscale_trainable: bool,
+        y_bound_trainable: bool,
+        w_noise_trainable: bool,
+        amortize_y_bound: bool,
+        amortize_w_noise: bool,
+        num_mlp_hidden_units: int,
         dtype: tf.DType = tf.float32,
         name="dp_set_conv",
         **kwargs,
@@ -39,37 +44,74 @@ class DPSetConvEncoder(tf.Module):
             dtype=dtype,
         )
 
-        self.log_y_bound = tf.Variable(
-            initial_value=tf.math.log(y_bound_init),
-            trainable=y_bound_trainable,
-            dtype=dtype,
-        )
+        self.amortize_y_bound = amortize_y_bound
+        self.amortize_w_noise = amortize_w_noise
 
-        self.logit_w_noise = tf.Variable(
-            initial_value=logit(w_noise_init),
-            trainable=w_noise_trainable,
-            dtype=dtype,
-        )
+
+        if self.amortize_y_bound:
+            self._log_y_bound = TwoLayerMLP(
+                seed=seed,
+                num_hidden_units=num_mlp_hidden_units,
+                num_output_units=1,
+                dtype=dtype,
+            )
+            seed = seed + 1
+
+        else:
+            self._log_y_bound = tf.Variable(
+                initial_value=tf.math.log(y_bound_init),
+                trainable=y_bound_trainable,
+                dtype=dtype,
+            )
+
+        if self.amortize_w_noise:
+            self._logit_w_noise = TwoLayerMLP(
+                seed=seed,
+                num_hidden_units=num_mlp_hidden_units,
+                num_output_units=1,
+                dtype=dtype,
+            )
+
+        else:
+            self._logit_w_noise = tf.Variable(
+                initial_value=logit(w_noise_init),
+                trainable=w_noise_trainable,
+                dtype=dtype,
+            )
 
         self.margin = margin
+
+    def log_y_bound(self, sens_per_sigma: tf.Tensor) -> tf.Tensor:
+
+        if self.amortize_y_bound:
+            return self._log_y_bound(sens_per_sigma[:, None])
+
+        else:
+            return self._log_y_bound[None, None]
+
+    def logit_w_noise(self, sens_per_sigma: tf.Tensor) -> tf.Tensor:
+
+        if self.amortize_w_noise:
+            return self._logit_w_noise(sens_per_sigma[:, None])
+
+        else:
+            return self._logit_w_noise[None, None]
 
     @property
     def lengthscale(self) -> tf.Tensor:
         return tf.exp(self.log_lengthscale)
 
-    @property
-    def y_bound(self) -> tf.Tensor:
-        return tf.exp(self.log_y_bound) + 1e-2
+    def y_bound(self, sens_per_sigma: tf.Tensor) -> tf.Tensor:
+        return tf.exp(self.log_y_bound(sens_per_sigma=sens_per_sigma)) + 1e-2
     
-    @property
-    def w_noise(self) -> tf.Tensor:
-        return (1 - 2e-2) * tf.nn.sigmoid(self.logit_w_noise) + 1e-2
+    def w_noise(self, sens_per_sigma: tf.Tensor) -> tf.Tensor:
+        return (1 - 2e-2) * tf.nn.sigmoid(self.logit_w_noise(sens_per_sigma=sens_per_sigma)) + 1e-2
     
     def data_sigma(self, sens_per_sigma: tf.Tensor) -> tf.Tensor:
-        return 2.0 * self.y_bound / (sens_per_sigma * self.w_noise ** 0.5)
+        return 2.0 * self.y_bound(sens_per_sigma=sens_per_sigma) / (sens_per_sigma[:, None] * self.w_noise(sens_per_sigma=sens_per_sigma) ** 0.5)
 
     def density_sigma(self, sens_per_sigma: tf.Tensor) -> tf.Tensor:
-        return 2**0.5 / (sens_per_sigma * (1 - self.w_noise) ** 0.5)
+        return 2**0.5 / (sens_per_sigma[:, None] * (1 - self.w_noise(sens_per_sigma=sens_per_sigma)) ** 0.5)
 
     def __call__(
             self,
@@ -87,8 +129,11 @@ class DPSetConvEncoder(tf.Module):
             [("B", "C", "Dx"), ("B", "C", 1), ("B", "T", "Dx")],
         )
 
+        # Compute sensitivity per sigma
+        sens_per_sigma = dp_sens_per_sigma(epsilon=epsilon, delta=delta)
+
         # Clip context outputs and concatenate tensor of ones
-        y_ctx = self.clip_y(y_ctx)  # shape (batch_size, num_ctx, 1)
+        y_ctx = self.clip_y(y_ctx=y_ctx, sens_per_sigma=sens_per_sigma)  # shape (batch_size, num_ctx, 1)
         y_ctx = tf.concat(
             [y_ctx, tf.ones_like(y_ctx)],
             axis=-1,
@@ -119,8 +164,7 @@ class DPSetConvEncoder(tf.Module):
         seed, noise = self.sample_noise(
             seed=seed,
             x_grid=x_grid_flat,
-            epsilon=epsilon,
-            delta=delta,
+            sens_per_sigma=sens_per_sigma,
         )
         
         z_grid_flat = z_grid_flat + noise
@@ -135,7 +179,7 @@ class DPSetConvEncoder(tf.Module):
         return seed, x_grid, z_grid
 
 
-    def clip_y(self, y_ctx: tf.Tensor) -> tf.Tensor:
+    def clip_y(self, sens_per_sigma: tf.Tensor, y_ctx: tf.Tensor) -> tf.Tensor:
         """Clip the context outputs to be within the range [-y_bound, y_bound].
 
         Arguments:
@@ -147,34 +191,29 @@ class DPSetConvEncoder(tf.Module):
                 context outputs.
         """
 
-        return tf.clip_by_value(y_ctx, -self.y_bound, self.y_bound)
+        y_bound = self.y_bound(sens_per_sigma=sens_per_sigma[:, None])
+        return tf.clip_by_value(y_ctx, -y_bound, y_bound)
 
 
     def sample_noise(
             self,
             seed: Seed,
             x_grid: tf.Tensor,
-            epsilon: tf.Tensor,
-            delta: tf.Tensor,
+            sens_per_sigma: tf.Tensor,
         ) -> tf.Tensor:
         """Sample noise for the density and data channels.
 
         Arguments:
             x_grid: Tensor of shape (batch_size, num_grid_points, Dx)
-            epsilon: DP epsilon parameter
-            delta: DP delta parameter
+            sens_per_sigma: Tensor of shape (batch_size,), sensitivity per sigma
 
         Returns:
             Tensor of shape (batch_size, num_grid_points, 2)
         """
 
-        # Save input data type
+        # Save input data type and convert x_grid to float64 for accuracy
         in_dtype = x_grid.dtype
-
-        # Convert everything to float64 for numerical accuracy
         x_grid = cast(x_grid, dtype=f64)
-        epsilon = cast(epsilon, dtype=f64)
-        delta = cast(delta, dtype=f64)
 
         # Compute noise GP covariance and its cholesky
         kxx = compute_eq_weights(
@@ -197,9 +236,6 @@ class DPSetConvEncoder(tf.Module):
             cov_chol=kxx_chol,
         )  # shape (batch_size, num_grid_points,) 
 
-        # Compute sensitivity per sigma
-        sens_per_sigma = dp_sens_per_sigma(epsilon=epsilon, delta=delta)
-
         tf.debugging.assert_all_finite(
             sens_per_sigma,
             message="sens_per_sigma contains NaNs or inf.",
@@ -208,16 +244,15 @@ class DPSetConvEncoder(tf.Module):
         # Convert back to input data types
         data_noise = cast(data_noise, dtype=in_dtype)
         density_noise = cast(density_noise, dtype=in_dtype)
-        sens_per_sigma = cast(sens_per_sigma, dtype=in_dtype)
 
         # Multiply noise by standard deviations
         data_noise = data_noise * self.data_sigma(
             sens_per_sigma=sens_per_sigma,
-        )[:, None]
+        )
 
         density_noise = density_noise * self.density_sigma(
             sens_per_sigma=sens_per_sigma,
-        )[:, None]
+        )
 
         return seed, tf.stack(
             [data_noise, density_noise],
@@ -227,12 +262,12 @@ class DPSetConvEncoder(tf.Module):
 
 class SetConvDecoder(tf.Module):
 
-    def __init__(self, *, lengthscale_init: float, scaling_factor: float, trainable: bool = True):
+    def __init__(self, *, lengthscale_init: float, scaling_factor: float, lengthscale_trainable: bool = True):
         super().__init__()
 
         self.log_lengthscale = tf.Variable(
             initial_value=tf.math.log(lengthscale_init),
-            trainable=trainable,
+            trainable=lengthscale_trainable,
         )
     
         self.scaling_factor = scaling_factor
@@ -272,6 +307,40 @@ class SetConvDecoder(tf.Module):
 
         return tf.matmul(weights, z_grid) / self.scaling_factor # shape (batch_size, num_trg, Dz)
     
+
+class TwoLayerMLP(tf.Module):
+
+    def __init__(
+        self,
+        *,
+        seed: int,
+        num_hidden_units: int,
+        num_output_units: int,
+        activation: str = "relu",
+        dtype: tf.DType = tf.float32,
+        name: str = "two_layer_mlp",
+        **kwargs,
+    ):
+        super().__init__(name=name, **kwargs)
+
+        self.dense1 = tfkl.Dense(
+            units=num_hidden_units,
+            activation=activation,
+            kernel_initializer=tf.initializers.GlorotUniform(seed=seed),
+            dtype=dtype,
+        )
+        seed = seed + 1
+
+        self.dense2 = tfkl.Dense(
+            units=num_output_units,
+            activation=None,
+            kernel_initializer=tf.initializers.GlorotUniform(seed=seed),
+            dtype=dtype,
+        )
+
+    def __call__(self, x: tf.Tensor) -> tf.Tensor:
+        return self.dense2(self.dense1(x))
+
 
 def make_discretisation_grid(
         x: tf.Tensor,
