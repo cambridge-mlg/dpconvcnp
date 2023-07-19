@@ -213,7 +213,7 @@ def initialize_experiment() -> Tuple[DictConfig, str, FileIO, Writer]:
     parser = argparse.ArgumentParser()
     parser.add_argument("--config", type=str)
     parser.add_argument("--debug", action="store_true")
-    args = parser.parse_args()
+    args, config_changes = parser.parse_known_args()
 
     # Create a repo object and check if local repo is clean
     repo = git.Repo(search_parent_directories=True)
@@ -228,7 +228,10 @@ def initialize_experiment() -> Tuple[DictConfig, str, FileIO, Writer]:
 
     # Initialise experiment, make path and writer
     OmegaConf.register_new_resolver("eval", eval)
-    config = OmegaConf.load(args.config) 
+    config = OmegaConf.load(args.config)
+    config_changes = OmegaConf.from_cli(config_changes)
+
+    config = OmegaConf.merge(config, config_changes) 
     experiment = instantiate(config)
     path = make_experiment_path(experiment)
     writer = Writer(f"{path}/logs")
