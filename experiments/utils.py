@@ -5,9 +5,9 @@ import yaml
 from omegaconf import OmegaConf, DictConfig
 from hydra.utils import instantiate
 from datetime import datetime
-from io import FileIO
 import git
 import sys
+import re
 
 import tensorflow as tf
 import tensorflow_probability as tfp
@@ -353,6 +353,8 @@ def tee_to_file(log_file_path: str):
         def __init__(self, file):
             self.terminal = sys.stdout
             self.log_file = file
+            self.progress_bar_pattern = re.compile(r"(.*?)\r")
+
 
         def write(self, message):
             self.terminal.write(message)

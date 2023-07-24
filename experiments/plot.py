@@ -127,7 +127,7 @@ def plot(
             info = get_batch_info(batches[i], 0)
             plt.title(
                 f"$N = {info['n']}$   "
-                f"$\\ell$ = {info['lengthscale'][0]:.2f}"
+                f"$\\ell$ = {info['lengthscale']:.2f}"
                 f"$\\epsilon$ = {info['epsilon']:.2f}  "
                 f"$N\\ell \\epsilon$ = {info['nle']:.0f}   "
                 f"$\\delta$ = {info['delta']:.3f}",
