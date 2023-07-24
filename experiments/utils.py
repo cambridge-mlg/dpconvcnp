@@ -7,6 +7,7 @@ from hydra.utils import instantiate
 from datetime import datetime
 from io import FileIO
 import git
+import sys
 
 import tensorflow as tf
 import tensorflow_probability as tfp
@@ -230,7 +231,7 @@ def gauss_gauss_kl_diag(
     return tfd.kl_divergence(dist_1, dist_2)
 
 
-def initialize_experiment() -> Tuple[DictConfig, str, FileIO, Writer, ModelCheckpointer]:
+def initialize_experiment() -> Tuple[DictConfig, str, str, Writer, ModelCheckpointer]:
     """Initialise experiment by parsing the config file, checking that the
     repo is clean, creating a path for the experiment, and creating a
     writer for tensorboard.
@@ -275,12 +276,13 @@ def initialize_experiment() -> Tuple[DictConfig, str, FileIO, Writer, ModelCheck
         config.update({"commit": hash})
         yaml.dump(config, file, indent=4, sort_keys=False)
     
-    stdout = open(f"{path}/stdout.txt", "w")
+    # Set path for logging training output messages
+    log_path = f"{path}/stdout.txt"
 
     # Create model checkpointer
     model_checkpointer = ModelCheckpointer(path=f"{path}/checkpoints")
 
-    return experiment, path, stdout, writer, model_checkpointer
+    return experiment, path, log_path, writer, model_checkpointer
 
 
 def has_commits_ahead(repo: git.Repo) -> bool:
@@ -343,3 +345,22 @@ def make_experiment_path(experiment: DictConfig) -> str:
         raise ValueError(f"Path {path} already exists.")
 
     return path
+
+def tee_to_file(log_file_path: str):
+    log_file = open(log_file_path, 'a')
+
+    class Logger(object):
+        def __init__(self, file):
+            self.terminal = sys.stdout
+            self.log_file = file
+
+        def write(self, message):
+            self.terminal.write(message)
+            self.log_file.write(message)
+
+        def flush(self):
+            self.terminal.flush()
+            self.log_file.flush()
+
+    sys.stdout = Logger(log_file)
+    sys.stderr = Logger(log_file)

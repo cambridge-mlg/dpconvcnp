@@ -1,14 +1,14 @@
 import sys
 
-from utils import initialize_experiment, train_epoch, valid_epoch
+from utils import initialize_experiment, train_epoch, valid_epoch, tee_to_file
 from plot import plot
 from dpconvcnp.utils import to_tensor, i32
 
 
 def main():
 
-    experiment, path, stdout, writer, checkpointer = initialize_experiment()
-    sys.stdout = stdout
+    experiment, path, log_path, writer, checkpointer = initialize_experiment()
+    tee_to_file(log_path)
 
     dpconvcnp = experiment.model
     gen_train = experiment.generators.train
@@ -42,8 +42,6 @@ def main():
             model=dpconvcnp,
             valid_result=valid_result,
         )
-
-        checkpointer.load_best_checkpoint(model=dpconvcnp)
 
         plot(
             path=path,
