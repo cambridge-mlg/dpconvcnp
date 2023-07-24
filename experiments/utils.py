@@ -8,6 +8,7 @@ from datetime import datetime
 import git
 import sys
 import re
+from io import FileIO
 
 import tensorflow as tf
 import tensorflow_probability as tfp
@@ -350,13 +351,19 @@ def tee_to_file(log_file_path: str):
     log_file = open(log_file_path, 'a')
 
     class Logger(object):
-        def __init__(self, file):
+
+        def __init__(self, file: FileIO):
             self.terminal = sys.stdout
             self.log_file = file
             self.progress_bar_pattern = re.compile(r"(.*?)\r")
 
 
-        def write(self, message):
+        def write(self, message: str):
+
+            progress_bar_match = self.progress_bar_pattern.search(message)
+            if progress_bar_match:
+                message = progress_bar_match.group(1)
+
             self.terminal.write(message)
             self.log_file.write(message)
 
