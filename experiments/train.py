@@ -16,10 +16,11 @@ def main():
     optimizer = experiment.optimizer
     seed = to_tensor(experiment.params.training_seed, i32)
     validation_seed = to_tensor(experiment.params.training_seed, i32)
+    epochs = experiment.params.epochs
 
     step = 0
 
-    for epoch in range(100):
+    for epoch in range(epochs):
         
         seed, step = train_epoch(
             seed=seed,

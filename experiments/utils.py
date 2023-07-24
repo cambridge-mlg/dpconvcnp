@@ -75,11 +75,7 @@ def train_epoch(
     step: int,
 ) -> Tuple[Seed, int]:
 
-    epoch = tqdm(
-        generator,
-        total=generator.num_batches,
-        desc="Training",
-    )
+    epoch = tqdm(generator, total=generator.num_batches, desc="Training")
 
     for batch in epoch:
         seed, loss = train_step(
@@ -103,7 +99,7 @@ def train_epoch(
         if not model.dpsetconv_encoder.amortize_w_noise:
             writer.add_scalar("w_noise", model.dpsetconv_encoder.w_noise(None)[0, 0], step)
 
-        epoch.set_postfix(loss=f"{loss:.4f}]")
+        epoch.set_postfix(loss=f"{loss:.4f}")
 
         step = step + 1
 
@@ -129,7 +125,9 @@ def valid_epoch(
 
     batches = []
 
-    for batch in tqdm(generator, total=generator.num_batches, desc="Validation"):
+    epoch = tqdm(generator, total=generator.num_batches, desc="Validation")
+
+    for batch in epoch:
         seed, loss, mean, std = model.loss(
             seed=seed,
             x_ctx=batch.x_ctx,
@@ -355,14 +353,9 @@ def tee_to_file(log_file_path: str):
         def __init__(self, file: FileIO):
             self.terminal = sys.stdout
             self.log_file = file
-            self.progress_bar_pattern = re.compile(r"(.*?)\r")
 
 
         def write(self, message: str):
-
-            progress_bar_match = self.progress_bar_pattern.search(message)
-            if progress_bar_match:
-                message = progress_bar_match.group(1)
 
             self.terminal.write(message)
             self.log_file.write(message)
