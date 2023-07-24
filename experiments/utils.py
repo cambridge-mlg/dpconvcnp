@@ -125,9 +125,7 @@ def valid_epoch(
 
     batches = []
 
-    epoch = tqdm(generator, total=generator.num_batches, desc="Validation")
-
-    for batch in epoch:
+    for batch in tqdm(generator, total=generator.num_batches, desc="Validation"):
         seed, loss, mean, std = model.loss(
             seed=seed,
             x_ctx=batch.x_ctx,
