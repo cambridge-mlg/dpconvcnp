@@ -7,7 +7,7 @@ from dpconvcnp.utils import to_tensor, i32
 
 def main():
 
-    experiment, path, stdout, writer = initialize_experiment()
+    experiment, path, stdout, writer, checkpointer = initialize_experiment()
     sys.stdout = stdout
 
     dpconvcnp = experiment.model
@@ -30,13 +30,20 @@ def main():
             step=step,
         )
 
-        plot_seed, _, batches = valid_epoch(
+        plot_seed, valid_result, batches = valid_epoch(
             seed=validation_seed,
             model=dpconvcnp,
             generator=gen_valid,
             writer=writer,
             epoch=epoch,
         )
+
+        checkpointer.update_best_and_last_checkpoints(
+            model=dpconvcnp,
+            valid_result=valid_result,
+        )
+
+        checkpointer.load_best_checkpoint(model=dpconvcnp)
 
         plot(
             path=path,

@@ -9,7 +9,7 @@ from dpconvcnp.model.setconv import DPSetConvEncoder, SetConvDecoder
 tfd = tfp.distributions
 
 
-class DPConvCNP(tf.Module):
+class DPConvCNP(tf.keras.Model):
 
     def __init__(
         self,

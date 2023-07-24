@@ -174,6 +174,38 @@ def valid_epoch(
     return seed, result, batches
     
 
+class ModelCheckpointer:
+
+    def __init__(self, path: str):
+        self.path = path
+        self.best_validation_loss = float("inf")
+
+    def update_best_and_last_checkpoints(
+        self,
+        model: tf.Module,
+        valid_result: Dict[str, tf.Tensor],
+    ) -> None:
+        """Update the best and last checkpoints of the model.
+
+        Arguments:
+            model: model to save.
+            valid_result: validation result dictionary.
+        """
+        
+        if valid_result["loss"] < self.best_validation_loss:
+            self.best_validation_loss = valid_result["loss"]
+            model.save_weights(f"{self.path}/best")
+
+        model.save_weights(f"{self.path}/last")
+
+
+    def load_best_checkpoint(self, model: tf.Module) -> None:
+        model.load_weights(f"{self.path}/best")
+    
+    def load_last_checkpoint(self, model: tf.Module) -> None:
+        model.load_weights(f"{self.path}/last")
+
+
 def gauss_gauss_kl_diag(
     mean_1: tf.Tensor,
     std_1: tf.Tensor,
@@ -198,7 +230,7 @@ def gauss_gauss_kl_diag(
     return tfd.kl_divergence(dist_1, dist_2)
 
 
-def initialize_experiment() -> Tuple[DictConfig, str, FileIO, Writer]:
+def initialize_experiment() -> Tuple[DictConfig, str, FileIO, Writer, ModelCheckpointer]:
     """Initialise experiment by parsing the config file, checking that the
     repo is clean, creating a path for the experiment, and creating a
     writer for tensorboard.
@@ -245,7 +277,10 @@ def initialize_experiment() -> Tuple[DictConfig, str, FileIO, Writer]:
     
     stdout = open(f"{path}/stdout.txt", "w")
 
-    return experiment, path, stdout, writer
+    # Create model checkpointer
+    model_checkpointer = ModelCheckpointer(path=f"{path}/checkpoints")
+
+    return experiment, path, stdout, writer, model_checkpointer
 
 
 def has_commits_ahead(repo: git.Repo) -> bool:
