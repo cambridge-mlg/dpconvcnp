@@ -81,8 +81,8 @@ class DPSetConvEncoder(tf.Module):
 
         self.margin = margin
 
-        self.xmin = to_tensor(xmin, dtype=dtype)
-        self.xmax = to_tensor(xmax, dtype=dtype)
+        self.xmin = to_tensor(xmin, dtype=dtype) if xmin is not None else None
+        self.xmax = to_tensor(xmax, dtype=dtype) if xmax is not None else None
 
     def log_y_bound(self, sens_per_sigma: tf.Tensor) -> tf.Tensor:
         if self.amortize_y_bound:
