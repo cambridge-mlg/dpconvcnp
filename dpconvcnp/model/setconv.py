@@ -3,7 +3,7 @@ from typing import Tuple
 import tensorflow as tf
 from check_shape import check_shape
 
-from dpconvcnp.random import zero_mean_mvn_chol, randint
+from dpconvcnp.random import zero_mean_mvn_chol
 from dpconvcnp.random import Seed
 from dpconvcnp.utils import f64, cast, logit
 from dpconvcnp.model.privacy_accounting import (
@@ -14,7 +14,6 @@ tfkl = tf.keras.layers
 
 
 class DPSetConvEncoder(tf.Module):
-
     def __init__(
         self,
         *,
@@ -46,7 +45,6 @@ class DPSetConvEncoder(tf.Module):
 
         self.amortize_y_bound = amortize_y_bound
         self.amortize_w_noise = amortize_w_noise
-
 
         if self.amortize_y_bound:
             self._log_y_bound = TwoLayerMLP(
@@ -82,7 +80,6 @@ class DPSetConvEncoder(tf.Module):
         self.margin = margin
 
     def log_y_bound(self, sens_per_sigma: tf.Tensor) -> tf.Tensor:
-
         if self.amortize_y_bound:
             return self._log_y_bound(sens_per_sigma[:, None])
 
@@ -90,7 +87,6 @@ class DPSetConvEncoder(tf.Module):
             return self._log_y_bound[None, None]
 
     def logit_w_noise(self, sens_per_sigma: tf.Tensor) -> tf.Tensor:
-
         if self.amortize_w_noise:
             return self._logit_w_noise(sens_per_sigma[:, None])
 
@@ -102,27 +98,35 @@ class DPSetConvEncoder(tf.Module):
         return tf.exp(self.log_lengthscale)
 
     def y_bound(self, sens_per_sigma: tf.Tensor) -> tf.Tensor:
-        return tf.exp(self.log_y_bound(sens_per_sigma=sens_per_sigma)) + 1e-2
-    
+        y_bound = tf.exp(self.log_y_bound(sens_per_sigma=sens_per_sigma))
+        return y_bound + 1e-2
+
     def w_noise(self, sens_per_sigma: tf.Tensor) -> tf.Tensor:
-        return (1 - 2e-2) * tf.nn.sigmoid(self.logit_w_noise(sens_per_sigma=sens_per_sigma)) + 1e-2
-    
+        w_noise = tf.nn.sigmoid(
+            self.logit_w_noise(sens_per_sigma=sens_per_sigma)
+        )
+        return (1 - 2e-2) * w_noise + 1e-2
+
     def data_sigma(self, sens_per_sigma: tf.Tensor) -> tf.Tensor:
-        return 2.0 * self.y_bound(sens_per_sigma=sens_per_sigma) / (sens_per_sigma[:, None] * self.w_noise(sens_per_sigma=sens_per_sigma) ** 0.5)
+        y_bound = self.y_bound(sens_per_sigma=sens_per_sigma)
+        w_noise = self.w_noise(sens_per_sigma=sens_per_sigma)
+
+        return 2.0 * y_bound / (sens_per_sigma[:, None] * w_noise**0.5)
 
     def density_sigma(self, sens_per_sigma: tf.Tensor) -> tf.Tensor:
-        return 2**0.5 / (sens_per_sigma[:, None] * (1 - self.w_noise(sens_per_sigma=sens_per_sigma)) ** 0.5)
+        w_noise = self.w_noise(sens_per_sigma=sens_per_sigma)
+
+        return 2**0.5 / (sens_per_sigma[:, None] * (1 - w_noise) ** 0.5)
 
     def __call__(
-            self,
-            seed: Seed,
-            x_ctx: tf.Tensor,
-            y_ctx: tf.Tensor,
-            x_trg: tf.Tensor,
-            epsilon: tf.Tensor,
-            delta: tf.Tensor,
-        ) -> Tuple[Seed, tf.Tensor, tf.Tensor]:
-        
+        self,
+        seed: Seed,
+        x_ctx: tf.Tensor,
+        y_ctx: tf.Tensor,
+        x_trg: tf.Tensor,
+        epsilon: tf.Tensor,
+        delta: tf.Tensor,
+    ) -> Tuple[Seed, tf.Tensor, tf.Tensor]:
         # Check context shapes
         check_shape(
             [x_ctx, y_ctx, x_trg],
@@ -133,7 +137,10 @@ class DPSetConvEncoder(tf.Module):
         sens_per_sigma = dp_sens_per_sigma(epsilon=epsilon, delta=delta)
 
         # Clip context outputs and concatenate tensor of ones
-        y_ctx = self.clip_y(y_ctx=y_ctx, sens_per_sigma=sens_per_sigma)  # shape (batch_size, num_ctx, 1)
+        y_ctx = self.clip_y(
+            y_ctx=y_ctx,
+            sens_per_sigma=sens_per_sigma,
+        )  # shape (batch_size, num_ctx, 1)
         y_ctx = tf.concat(
             [y_ctx, tf.ones_like(y_ctx)],
             axis=-1,
@@ -145,7 +152,9 @@ class DPSetConvEncoder(tf.Module):
             points_per_unit=self.points_per_unit,
             margin=self.margin,
         )  # shape (batch_size, n1, ..., ndim, Dx)
-        x_grid_flat = flatten_grid(x_grid)  # shape (batch_size, num_grid_points, Dx)
+        x_grid_flat = flatten_grid(
+            x_grid
+        )  # shape (batch_size, num_grid_points, Dx)
 
         # Compute matrix of weights between context points and grid points
         weights = compute_eq_weights(
@@ -166,18 +175,18 @@ class DPSetConvEncoder(tf.Module):
             x_grid=x_grid_flat,
             sens_per_sigma=sens_per_sigma,
         )
-        
+
         z_grid_flat = z_grid_flat + noise
-        #raise Exception(f"{z_grid_flat.shape=} {x_grid.shape=} {x_grid_flat.shape=}")
 
         # Reshape grid
         z_grid = tf.reshape(
             z_grid_flat,
-            shape=tf.concat([tf.shape(x_grid)[:-1], tf.shape(z_grid_flat)[-1:]], axis=0),
+            shape=tf.concat(
+                [tf.shape(x_grid)[:-1], tf.shape(z_grid_flat)[-1:]], axis=0
+            ),
         )  # shape (batch_size, n1, ..., ndim, 2)
 
         return seed, x_grid, z_grid
-
 
     def clip_y(self, sens_per_sigma: tf.Tensor, y_ctx: tf.Tensor) -> tf.Tensor:
         """Clip the context outputs to be within the range [-y_bound, y_bound].
@@ -185,7 +194,7 @@ class DPSetConvEncoder(tf.Module):
         Arguments:
             y_ctx: Tensor of shape (batch_size, num_ctx, dim) containing the
                 context outputs.
-            
+
         Returns:
             Tensor of shape (batch_size, num_ctx, dim) containing the clipped
                 context outputs.
@@ -194,13 +203,12 @@ class DPSetConvEncoder(tf.Module):
         y_bound = self.y_bound(sens_per_sigma=sens_per_sigma[:, None])
         return tf.clip_by_value(y_ctx, -y_bound, y_bound)
 
-
     def sample_noise(
-            self,
-            seed: Seed,
-            x_grid: tf.Tensor,
-            sens_per_sigma: tf.Tensor,
-        ) -> tf.Tensor:
+        self,
+        seed: Seed,
+        x_grid: tf.Tensor,
+        sens_per_sigma: tf.Tensor,
+    ) -> tf.Tensor:
         """Sample noise for the density and data channels.
 
         Arguments:
@@ -234,7 +242,7 @@ class DPSetConvEncoder(tf.Module):
         seed, density_noise = zero_mean_mvn_chol(
             seed=seed,
             cov_chol=kxx_chol,
-        )  # shape (batch_size, num_grid_points,) 
+        )  # shape (batch_size, num_grid_points,)
 
         tf.debugging.assert_all_finite(
             sens_per_sigma,
@@ -261,27 +269,32 @@ class DPSetConvEncoder(tf.Module):
 
 
 class SetConvDecoder(tf.Module):
-
-    def __init__(self, *, lengthscale_init: float, scaling_factor: float, lengthscale_trainable: bool = True):
+    def __init__(
+        self,
+        *,
+        lengthscale_init: float,
+        scaling_factor: float,
+        lengthscale_trainable: bool = True,
+    ):
         super().__init__()
 
         self.log_lengthscale = tf.Variable(
             initial_value=tf.math.log(lengthscale_init),
             trainable=lengthscale_trainable,
         )
-    
+
         self.scaling_factor = scaling_factor
 
     @property
     def lengthscale(self) -> tf.Tensor:
         return tf.exp(self.log_lengthscale)
-    
+
     def __call__(
-            self,
-            x_grid: tf.Tensor,
-            z_grid: tf.Tensor,
-            x_trg: tf.Tensor,
-        ) -> tf.Tensor:
+        self,
+        x_grid: tf.Tensor,
+        z_grid: tf.Tensor,
+        x_trg: tf.Tensor,
+    ) -> tf.Tensor:
         """Apply EQ kernel smoothing to the grid points,
         to interpolate to the target points.
 
@@ -295,8 +308,12 @@ class SetConvDecoder(tf.Module):
         """
 
         # Flatten grids
-        x_grid = flatten_grid(x_grid)  # shape (batch_size, num_grid_points, Dx)
-        z_grid = flatten_grid(z_grid)  # shape (batch_size, num_grid_points, Dz)
+        x_grid = flatten_grid(
+            x_grid
+        )  # shape (batch_size, num_grid_points, Dx)
+        z_grid = flatten_grid(
+            z_grid
+        )  # shape (batch_size, num_grid_points, Dz)
 
         # Compute weights
         weights = compute_eq_weights(
@@ -305,11 +322,12 @@ class SetConvDecoder(tf.Module):
             lengthscale=self.lengthscale,
         )  # shape (batch_size, num_trg, num_grid_points)
 
-        return tf.matmul(weights, z_grid) / self.scaling_factor # shape (batch_size, num_trg, Dz)
-    
+        z_grid = tf.matmul(weights, z_grid) / self.scaling_factor
+
+        return z_grid  # shape (batch_size, num_trg, Dz)
+
 
 class TwoLayerMLP(tf.Module):
-
     def __init__(
         self,
         *,
@@ -343,10 +361,10 @@ class TwoLayerMLP(tf.Module):
 
 
 def make_discretisation_grid(
-        x: tf.Tensor,
-        points_per_unit: int,
-        margin: float,
-    ) -> tf.Tensor:
+    x: tf.Tensor,
+    points_per_unit: int,
+    margin: float,
+) -> tf.Tensor:
     """Create a grid with density `points_per_unit` in each dimension,
     such that the grid contains all the points in `x` and has a margin of
     at least `margin` around the points in `x`, and is centered at the
@@ -374,10 +392,10 @@ def make_discretisation_grid(
         (0.5 * (x_max - x_min) + margin) * points_per_unit
     )  # shape (batch_size, dim)
 
-    # Take the maximum over the batch, in order to use the same number of 
+    # Take the maximum over the batch, in order to use the same number of
     # points across all tasks in the batch, in order to enable tensor batching
     N = tf.reduce_max(N, axis=0)  # shape (dim,)
-    N = 2**tf.math.ceil(tf.math.log(N) / tf.math.log(2.))  # shape (dim,)
+    N = 2 ** tf.math.ceil(tf.math.log(N) / tf.math.log(2.0))  # shape (dim,)
 
     # Compute the discretisation grid
     grid = tf.stack(
@@ -392,10 +410,6 @@ def make_discretisation_grid(
     x_mid = 0.5 * (x_min + x_max)  # shape (batch_size, dim)
     for _ in range(dim):
         x_mid = tf.expand_dims(x_mid, axis=1)
-    #x_mid = tf.reshape(
-    #    x_mid,
-    #    shape=tf.concat([tf.shape(x)[0]] + [[1]] * dim + [tf.shape(x)[2]], axis=0),
-    #)  # shape (batch_size, 1, 1, ..., 1, dim)
 
     # Multiply integer grid by the grid spacing and add midpoint
     grid = x_mid + grid[None, ...] / points_per_unit
@@ -417,10 +431,10 @@ def flatten_grid(grid: tf.Tensor) -> tf.Tensor:
 
 
 def compute_eq_weights(
-        x1: tf.Tensor,
-        x2: tf.Tensor,
-        lengthscale: tf.Tensor,
-    ) -> tf.Tensor:
+    x1: tf.Tensor,
+    x2: tf.Tensor,
+    lengthscale: tf.Tensor,
+) -> tf.Tensor:
     """Compute the weights for the SetConv layer, mapping from `x1` to `x2`.
 
     Arguments:
@@ -433,7 +447,7 @@ def compute_eq_weights(
 
     # Compute pairwise distances between x1 and x2
     dist2 = tf.reduce_sum(
-        (x1[:, :, None, :] - x2[:, None, :, :])**2.,
+        (x1[:, :, None, :] - x2[:, None, :, :]) ** 2.0,
         axis=-1,
     )  # shape (batch_size, num_x1, num_x2)
 
