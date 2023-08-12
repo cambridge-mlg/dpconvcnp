@@ -1,11 +1,11 @@
-from typing import Tuple
+from typing import Tuple, Optional, List
 
 import tensorflow as tf
 from check_shape import check_shape
 
 from dpconvcnp.random import zero_mean_mvn_chol
 from dpconvcnp.random import Seed
-from dpconvcnp.utils import f64, cast, logit
+from dpconvcnp.utils import f64, cast, logit, to_tensor
 from dpconvcnp.model.privacy_accounting import (
     sens_per_sigma as dp_sens_per_sigma,
 )
@@ -29,6 +29,8 @@ class DPSetConvEncoder(tf.Module):
         amortize_y_bound: bool,
         amortize_w_noise: bool,
         num_mlp_hidden_units: int,
+        xmin: Optional[List[float]] = None,
+        xmax: Optional[List[float]] = None,
         dtype: tf.DType = tf.float32,
         name="dp_set_conv",
         **kwargs,
@@ -78,6 +80,9 @@ class DPSetConvEncoder(tf.Module):
             )
 
         self.margin = margin
+
+        self.xmin = to_tensor(xmin, dtype=dtype)
+        self.xmax = to_tensor(xmax, dtype=dtype)
 
     def log_y_bound(self, sens_per_sigma: tf.Tensor) -> tf.Tensor:
         if self.amortize_y_bound:
@@ -141,17 +146,27 @@ class DPSetConvEncoder(tf.Module):
             y_ctx=y_ctx,
             sens_per_sigma=sens_per_sigma,
         )  # shape (batch_size, num_ctx, 1)
+
         y_ctx = tf.concat(
             [y_ctx, tf.ones_like(y_ctx)],
             axis=-1,
         )  # shape (batch_size, num_ctx, Dy+1)
 
         # Compute endpoints of discretisation grid
-        x_grid = make_discretisation_grid(
-            x=tf.concat([x_ctx, x_trg], axis=1),
-            points_per_unit=self.points_per_unit,
-            margin=self.margin,
+        x_grid = (
+            make_adaptive_discretisation_grid(
+                x=tf.concat([x_ctx, x_trg], axis=1),
+                points_per_unit=self.points_per_unit,
+                margin=self.margin,
+            )
+            if self.xmin is None or self.xmax is None
+            else make_discretisation_grid(
+                xmin=self.xmin,
+                xmax=self.xmax,
+                points_per_unit=self.points_per_unit,
+            )
         )  # shape (batch_size, n1, ..., ndim, Dx)
+
         x_grid_flat = flatten_grid(
             x_grid
         )  # shape (batch_size, num_grid_points, Dx)
@@ -360,7 +375,7 @@ class TwoLayerMLP(tf.Module):
         return self.dense2(self.dense1(x))
 
 
-def make_discretisation_grid(
+def make_adaptive_discretisation_grid(
     x: tf.Tensor,
     points_per_unit: int,
     margin: float,
@@ -383,13 +398,46 @@ def make_discretisation_grid(
     # Number of dimensions of the grid
     dim = x.shape[-1]
 
-    # Compute min and max of each dimension
-    x_min = tf.reduce_min(x, axis=1)  # shape (batch_size, dim)
-    x_max = tf.reduce_max(x, axis=1)  # shape (batch_size, dim)
+    # Compute the lower and upper corners of the box containing the points
+    xmin = tf.reduce_min(x, axis=1)
+    xmax = tf.reduce_max(x, axis=1)
+
+    return make_discretisation_grid(
+        xmin=xmin,
+        xmax=xmax,
+        points_per_unit=points_per_unit,
+        margin=margin,
+    )
+
+
+def make_discretisation_grid(
+    xmin: tf.Tensor,
+    xmax: tf.Tensor,
+    points_per_unit: int,
+    margin: float,
+) -> tf.Tensor:
+    """Create a grid with density `points_per_unit` in each dimension,
+    such that the grid spans the box with corners `xmin` and `xmax` and
+    has a margin of at least `margin` around the box.
+
+    Arguments:
+        xmin: Tensor of shape (batch_size, dim) containing the lower
+            corner of the box.
+        xmax: Tensor of shape (batch_size, dim) containing the upper
+            corner of the box.
+        points_per_unit: Number of points per unit length in each dimension.
+        margin: Margin around the box.
+
+    Returns:
+        Tensor of shape (batch_size, n1, n2, ..., ndim, dim)
+    """
+
+    # Number of dimensions of the grid
+    dim = xmin.shape[-1]
 
     # Compute half the number of points in each dimension
     N = tf.math.ceil(
-        (0.5 * (x_max - x_min) + margin) * points_per_unit
+        (0.5 * (xmax - xmin) + margin) * points_per_unit
     )  # shape (batch_size, dim)
 
     # Take the maximum over the batch, in order to use the same number of
@@ -400,14 +448,14 @@ def make_discretisation_grid(
     # Compute the discretisation grid
     grid = tf.stack(
         tf.meshgrid(
-            *[tf.range(-N[i], N[i], dtype=x.dtype) for i in range(dim)]
+            *[tf.range(-N[i], N[i], dtype=xmin.dtype) for i in range(dim)]
         ),
         axis=-1,
     )  # shape (n1, n2, ..., ndim, dim)
 
     # Compute midpoints of each dimeension and expand the midpoint tensor
     # to match the number of dimensions in the grid
-    x_mid = 0.5 * (x_min + x_max)  # shape (batch_size, dim)
+    x_mid = 0.5 * (xmin + xmax)  # shape (batch_size, dim)
     for _ in range(dim):
         x_mid = tf.expand_dims(x_mid, axis=1)
 
