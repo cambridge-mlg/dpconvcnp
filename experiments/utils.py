@@ -21,7 +21,7 @@ from dpconvcnp.data.data import DataGenerator, Batch
 tfd = tfp.distributions
 
 
-@tf.function(experimental_relax_shapes=True) 
+@tf.function(reduce_retracing=True) 
 def train_step(
     seed: Seed,
     model: tf.Module,

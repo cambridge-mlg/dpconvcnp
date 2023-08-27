@@ -59,7 +59,7 @@ class DPConvCNP(tf.keras.Model):
         return seed, mean, std
 
 
-    @tf.function(experimental_relax_shapes=True) 
+    @tf.function(reduce_retracing=True) 
     def loss(
         self,
         seed: Seed,
