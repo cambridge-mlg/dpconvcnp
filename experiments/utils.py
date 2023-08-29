@@ -47,7 +47,6 @@ def train_step(
         loss: negative log likelihood.
     """
 
-
     with tf.GradientTape() as tape:
         seed, loss, _, _ = model.loss(
             seed=seed,
@@ -74,7 +73,6 @@ def train_epoch(
     writer: Writer,
     step: int,
 ) -> Tuple[Seed, int]:
-
     epoch = tqdm(generator, total=generator.num_batches, desc="Training")
 
     for batch in epoch:
@@ -91,13 +89,17 @@ def train_epoch(
         )
 
         writer.add_scalar("train/loss", loss, step)
-        #writer.add_scalar("lengthscale", model.dpsetconv_encoder.lengthscale, step)
-        
+        # writer.add_scalar("lengthscale", model.dpsetconv_encoder.lengthscale, step)
+
         if not model.dpsetconv_encoder.amortize_y_bound:
-            writer.add_scalar("y_bound", model.dpsetconv_encoder.y_bound(None)[0], step)
+            writer.add_scalar(
+                "y_bound", model.dpsetconv_encoder.y_bound(None)[0], step
+            )
 
         if not model.dpsetconv_encoder.amortize_w_noise:
-            writer.add_scalar("w_noise", model.dpsetconv_encoder.w_noise(None)[0], step)
+            writer.add_scalar(
+                "w_noise", model.dpsetconv_encoder.w_noise(None)[0], step
+            )
 
         epoch.set_postfix(loss=f"{loss:.4f}")
 
@@ -113,7 +115,6 @@ def valid_epoch(
     writer: Writer,
     epoch: int,
 ) -> Tuple[Seed, Dict[str, tf.Tensor], List[Batch]]:
-
     result = {
         "kl_diag": [],
         "loss": [],
@@ -125,7 +126,9 @@ def valid_epoch(
 
     batches = []
 
-    for batch in tqdm(generator, total=generator.num_batches, desc="Validation"):
+    for batch in tqdm(
+        generator, total=generator.num_batches, desc="Validation"
+    ):
         seed, loss, mean, std = model.loss(
             seed=seed,
             x_ctx=batch.x_ctx,
@@ -170,10 +173,9 @@ def valid_epoch(
     writer.add_scalar("val/kl_diag", result["kl_diag"], epoch)
 
     return seed, result, batches
-    
+
 
 class ModelCheckpointer:
-
     def __init__(self, path: str):
         self.path = path
         self.best_validation_loss = float("inf")
@@ -189,17 +191,16 @@ class ModelCheckpointer:
             model: model to save.
             valid_result: validation result dictionary.
         """
-        
+
         if valid_result["loss"] < self.best_validation_loss:
             self.best_validation_loss = valid_result["loss"]
             model.save_weights(f"{self.path}/best")
 
         model.save_weights(f"{self.path}/last")
 
-
     def load_best_checkpoint(self, model: tf.Module) -> None:
         model.load_weights(f"{self.path}/best")
-    
+
     def load_last_checkpoint(self, model: tf.Module) -> None:
         model.load_weights(f"{self.path}/last")
 
@@ -228,7 +229,9 @@ def gauss_gauss_kl_diag(
     return tfd.kl_divergence(dist_1, dist_2)
 
 
-def initialize_experiment() -> Tuple[DictConfig, str, str, Writer, ModelCheckpointer]:
+def initialize_experiment() -> (
+    Tuple[DictConfig, str, str, Writer, ModelCheckpointer]
+):
     """Initialise experiment by parsing the config file, checking that the
     repo is clean, creating a path for the experiment, and creating a
     writer for tensorboard.
@@ -249,19 +252,19 @@ def initialize_experiment() -> Tuple[DictConfig, str, str, Writer, ModelCheckpoi
     repo = git.Repo(search_parent_directories=True)
 
     # Check that the repo is clean
-    assert args.debug or not repo.is_dirty(), (
-        "Repo is dirty, please commit changes."
-    )
-    assert args.debug or not has_commits_ahead(repo), (
-        "Repo has commits ahead, please push changes."
-    )
+    assert (
+        args.debug or not repo.is_dirty()
+    ), "Repo is dirty, please commit changes."
+    assert args.debug or not has_commits_ahead(
+        repo
+    ), "Repo has commits ahead, please push changes."
 
     # Initialise experiment, make path and writer
     OmegaConf.register_new_resolver("eval", eval)
     config = OmegaConf.load(args.config)
     config_changes = OmegaConf.from_cli(config_changes)
 
-    config = OmegaConf.merge(config, config_changes) 
+    config = OmegaConf.merge(config, config_changes)
     experiment = instantiate(config)
     path = make_experiment_path(experiment)
     writer = Writer(f"{path}/logs")
@@ -272,7 +275,7 @@ def initialize_experiment() -> Tuple[DictConfig, str, str, Writer, ModelCheckpoi
         config = OmegaConf.to_container(config)
         config.update({"commit": hash})
         yaml.dump(config, file, indent=4, sort_keys=False)
-    
+
     # Set path for logging training output messages
     log_path = f"{path}/stdout.txt"
 
@@ -282,9 +285,52 @@ def initialize_experiment() -> Tuple[DictConfig, str, str, Writer, ModelCheckpoi
     return experiment, path, log_path, writer, model_checkpointer
 
 
+def initialize_evaluation():
+    # Make argument parser with just the config argument
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--experiment_path", type=str)
+    parser.add_argument("--evaluation_config", type=str)
+    parser.add_argument("--debug", action="store_true")
+    args, _ = parser.parse_known_args()
+
+    # Create a repo object and check if local repo is clean
+    repo = git.Repo(search_parent_directories=True)
+
+    # Check that the repo is clean
+    assert (
+        args.debug or not repo.is_dirty()
+    ), "Repo is dirty, please commit changes."
+    assert args.debug or not has_commits_ahead(
+        repo
+    ), "Repo has commits ahead, please push changes."
+
+    # Initialise experiment, make path and writer
+    OmegaConf.register_new_resolver("eval", eval)
+    experiment_config = OmegaConf.load(f"{args.experiment_path}/config.yml")
+    evaluation_config = OmegaConf.load(args.evaluation_config)
+
+    # Check out commit hash
+    commit_hash = experiment_config.commit
+
+    # Create model checkpointer and load model
+    checkpointer = ModelCheckpointer(
+        path=f"{args.experiment_path}/checkpoints",
+    )
+
+    # Load model weights
+    model = checkpointer.load_best_checkpoint(
+        model=instantiate(experiment_config.model),
+    )
+
+    # Load evaluation generators
+    gens_eval = instantiate(evaluation_config.generators.eval)
+
+    return model, gens_eval, args.experiment_path
+
+
 def has_commits_ahead(repo: git.Repo) -> bool:
     """Check if there are commits ahead in the local current branch.
-    
+
     Arguments:
         repo: git repo object.
 
@@ -297,7 +343,9 @@ def has_commits_ahead(repo: git.Repo) -> bool:
 
     else:
         current_branch = repo.active_branch.name
-        commits = list(repo.iter_commits(f"origin/{current_branch}..{current_branch}"))
+        commits = list(
+            repo.iter_commits(f"origin/{current_branch}..{current_branch}")
+        )
         return len(commits) > 0
 
 
@@ -328,10 +376,11 @@ def make_experiment_path(experiment: DictConfig) -> str:
     Returns:
         experiment_path: path to the experiment.
     """
-    
+
     path = os.path.join(
         experiment.misc.results_root,
-        experiment.misc.experiment_name or datetime.now().strftime("%m-%d-%H-%M-%S"),
+        experiment.misc.experiment_name
+        or datetime.now().strftime("%m-%d-%H-%M-%S"),
     )
 
     if not os.path.exists(path):
@@ -343,18 +392,16 @@ def make_experiment_path(experiment: DictConfig) -> str:
 
     return path
 
+
 def tee_to_file(log_file_path: str):
-    log_file = open(log_file_path, 'a')
+    log_file = open(log_file_path, "a")
 
     class Logger(object):
-
         def __init__(self, file: FileIO):
             self.terminal = sys.stdout
             self.log_file = file
 
-
         def write(self, message: str):
-
             self.terminal.write(message)
             self.log_file.write(message)
 
