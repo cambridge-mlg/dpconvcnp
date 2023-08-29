@@ -1,4 +1,4 @@
-from typing import Tuple, Dict, List
+from typing import Tuple, Dict, List, Optional
 import argparse
 import os
 import yaml
@@ -112,8 +112,8 @@ def valid_epoch(
     seed: Seed,
     model: tf.Module,
     generator: DataGenerator,
-    writer: Writer,
-    epoch: int,
+    epoch: Optional[int] = None,
+    writer: Optional[Writer] = None,
 ) -> Tuple[Seed, Dict[str, tf.Tensor], List[Batch]]:
     result = {
         "kl_diag": [],
@@ -169,8 +169,9 @@ def valid_epoch(
     result["loss"] = tf.reduce_mean(result["loss"])
     result["kl_diag"] = tf.reduce_mean(result["kl_diag"])
 
-    writer.add_scalar("val/loss", result["loss"], epoch)
-    writer.add_scalar("val/kl_diag", result["kl_diag"], epoch)
+    if writer is not None:
+        writer.add_scalar("val/loss", result["loss"], epoch)
+        writer.add_scalar("val/kl_diag", result["kl_diag"], epoch)
 
     return seed, result, batches
 
