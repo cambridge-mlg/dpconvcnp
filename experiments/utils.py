@@ -319,7 +319,7 @@ def initialize_evaluation():
     )
 
     # Load model weights
-    model = checkpointer.load_best_checkpoint(
+    checkpointer.load_best_checkpoint(
         model=instantiate(experiment_config.model),
     )
 
@@ -329,7 +329,7 @@ def initialize_evaluation():
     # Load evaluation generators
     gens_eval = instantiate(evaluation_config.generators)
 
-    return model, gens_eval, args.experiment_path
+    return experiment_config.model, gens_eval, args.experiment_path
 
 
 def has_commits_ahead(repo: git.Repo) -> bool:
