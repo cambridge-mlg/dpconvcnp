@@ -23,7 +23,9 @@ KERNEL_TYPES = [
 ]
 
 
+
 class GPGenerator(SyntheticGenerator, ABC):
+    
     def __init__(
         self,
         *,
@@ -36,11 +38,9 @@ class GPGenerator(SyntheticGenerator, ABC):
         self.dim = dim
         self.noise_std = noise_std
 
-    def sample_outputs(
-        self, seed: Seed, x: tf.Tensor
-    ) -> Tuple[Seed, tf.Tensor, Callable]:
+    def sample_outputs(self, seed: Seed, x: tf.Tensor) -> Tuple[Seed, tf.Tensor, Callable]:
         """Sample context and target outputs, given the inputs `x`.
-
+        
         Arguments:
             seed: Random seed.
             x: Tensor of shape (batch_size, num_ctx + num_trg, dim) containing
@@ -57,9 +57,7 @@ class GPGenerator(SyntheticGenerator, ABC):
         gt_pred = self.set_up_ground_truth_gp(kernel=kernel)
 
         # Set up covariance at input locations
-        kxx = kernel(cast(x, f64)) + gpflow.kernels.White(
-            self.noise_std**2.0
-        )(cast(x, f64))
+        kxx = kernel(cast(x, f64)) + gpflow.kernels.White(self.noise_std**2.)(cast(x, f64))
 
         # Sample from GP with zero mean and covariance kxx
         seed, y = zero_mean_mvn(seed=seed, cov=kxx)
@@ -70,7 +68,7 @@ class GPGenerator(SyntheticGenerator, ABC):
     @abstractmethod
     def set_up_kernel(self, seed: Seed) -> Tuple[Seed, gpflow.kernels.Kernel]:
         """Set up GP kernel.
-
+        
         Arguments:
             seed: Random seed.
 
@@ -82,7 +80,7 @@ class GPGenerator(SyntheticGenerator, ABC):
 
     def set_up_ground_truth_gp(self, kernel: Callable) -> Callable:
         """Set up GP kernel.
-
+        
         Arguments:
             seed: Random seed.
 
@@ -94,7 +92,8 @@ class GPGenerator(SyntheticGenerator, ABC):
 
 
 class RandomScaleGPGenerator(GPGenerator):
-    noisy_mixture_long_lengthscale: float = 1.0
+
+    noisy_mixture_long_lengthscale: float = 1.
     weakly_periodic_period: float = 0.25
 
     def __init__(
@@ -111,11 +110,13 @@ class RandomScaleGPGenerator(GPGenerator):
         self.min_log10_lengthscale = to_tensor(min_log10_lengthscale, f64)
         self.max_log10_lengthscale = to_tensor(max_log10_lengthscale, f64)
 
-        assert (
-            self.kernel_type in KERNEL_TYPES
-        ), f"kernel_type must be in {KERNEL_TYPES}, found {self.kernel_type=}."
+        assert self.kernel_type in KERNEL_TYPES, (
+            f"kernel_type must be in {KERNEL_TYPES}, found {self.kernel_type=}."
+        )
+
 
     def set_up_kernel(self, seed: Seed) -> Tuple[Seed, gpflow.kernels.Kernel]:
+
         # Sample lengthscale
         seed, log10_lengthscale = randu(
             shape=(),
@@ -123,13 +124,11 @@ class RandomScaleGPGenerator(GPGenerator):
             minval=self.min_log10_lengthscale,
             maxval=self.max_log10_lengthscale,
         )
-        lengthscale = 10.0**log10_lengthscale
-
+        lengthscale = 10.**log10_lengthscale
+        
         if self.kernel_type == "eq":
-            kernel = gpflow.kernels.SquaredExponential(
-                lengthscales=lengthscale
-            )
-
+            kernel = gpflow.kernels.SquaredExponential(lengthscales=lengthscale)
+        
         elif self.kernel_type == "matern12":
             kernel = gpflow.kernels.Matern12(lengthscales=lengthscale)
 
@@ -157,7 +156,9 @@ class RandomScaleGPGenerator(GPGenerator):
 
 
 class GPGroundTruthPredictor(GroundTruthPredictor):
+
     def __init__(self, kernel: Callable, noise_std: float):
+
         self.kernel = kernel
         self.noise_std = noise_std
 
@@ -168,6 +169,7 @@ class GPGroundTruthPredictor(GroundTruthPredictor):
         x_trg: tf.Tensor,
         y_trg: Optional[tf.Tensor] = None,
     ) -> Tuple[tf.Tensor, tf.Tensor, Optional[tf.Tensor]]:
+
         dtype = x_ctx.dtype
 
         x_ctx = cast(x_ctx, f64)
@@ -175,9 +177,7 @@ class GPGroundTruthPredictor(GroundTruthPredictor):
         x_trg = cast(x_trg, f64)
         num_ctx = x_ctx.shape[1]
 
-        kernel_plus_noise = self.kernel + gpflow.kernels.White(
-            self.noise_std**2.0
-        )
+        kernel_plus_noise = self.kernel + gpflow.kernels.White(self.noise_std**2.)
 
         k = kernel_plus_noise(tf.concat([x_ctx, x_trg], axis=1))
         kcc = k[:, :num_ctx, :num_ctx]
@@ -191,9 +191,7 @@ class GPGroundTruthPredictor(GroundTruthPredictor):
 
         if y_trg is not None:
             y_trg = cast(y_trg, f64)
-            gt_log_lik = tfd.Normal(loc=mean, scale=std).log_prob(
-                y_trg[:, :, 0]
-            )
+            gt_log_lik = tfd.Normal(loc=mean, scale=std).log_prob(y_trg[:, :, 0])
             gt_log_lik = tf.reduce_sum(gt_log_lik, axis=1)
             gt_log_lik = cast(gt_log_lik, dtype)
 
