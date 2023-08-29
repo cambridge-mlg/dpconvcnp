@@ -146,7 +146,7 @@ def valid_epoch(
             y_trg=batch.y_trg,
         )
 
-        result["loss"].append(tf.reduce_mean(loss, axis=[1, 2]))
+        result["loss"].append(loss)
         result["pred_mean"].append(mean[:, :, 0])
         result["pred_std"].append(std[:, :, 0])
 
