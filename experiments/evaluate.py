@@ -10,7 +10,7 @@ def main():
 
     breakpoint()
 
-    valid_epoch(
+    seed, result, batches = valid_epoch(
         seed=[0, 0],
         model=model,
         generator=gens_eval[0],
