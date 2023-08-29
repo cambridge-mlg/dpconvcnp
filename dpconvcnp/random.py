@@ -109,6 +109,7 @@ def randn(
     assert (
         mean.dtype == stddev.dtype
     ), "mean and stddev must have the same dtype"
+
     assert mean.dtype in [
         tf.float32,
         tf.float64,
@@ -245,3 +246,32 @@ def zero_mean_mvn_chol(
     mean = tf.zeros(shape=tf.shape(cov_chol)[:-1], dtype=cov_chol.dtype)
 
     return mvn_chol(seed=seed, mean=mean, cov_chol=cov_chol)
+
+
+def zero_mean_mvn_on_grid_from_chol(
+    seed: tf.Tensor,
+    cov_chols: tf.Tensor,
+) -> Tuple[Seed, tf.Tensor]:
+
+    # Get data type
+    dtype = cov_chols[0].dtype
+
+    # Get grid shape
+    batch_shape = tf.shape(cov_chols[0])[0]
+    grid_shape = [tf.shape(cov_chol)[-1] for cov_chol in cov_chols]
+    shape = [batch_shape, *grid_shape]
+
+    # Draw random noise for each entry of the grid
+    seed, noise = randn(
+        shape=shape,
+        seed=seed,
+        mean=tf.zeros(shape=(), dtype=dtype),
+        stddev=tf.ones(shape=(), dtype=dtype),
+    )
+
+    for d, chol in enumerate(cov_chols):
+        noise = tf.experimental.numpy.swapaxes(noise, d+1, -1)
+        noise = tf.einsum("bij, b...j -> b...i", chol, noise)
+        noise = tf.experimental.numpy.swapaxes(noise, d+1, -1)
+
+    return seed, noise
