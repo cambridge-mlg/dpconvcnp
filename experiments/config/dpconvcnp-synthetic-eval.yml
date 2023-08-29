@@ -1,6 +1,6 @@
 generators:
   - _target_: dpconvcnp.data.gp.RandomScaleGPGenerator
-    seed: [0, 100]
+    seed: ${params.generator_seed}
     dim: ${params.dim}
     kernel_type: eq
     min_log10_lengthscale: -0.602
@@ -19,3 +19,7 @@ generators:
     min_log10_delta: -3
     max_log10_delta: -3
     reset_seed_at_epoch_end: true
+
+params:
+  dim: 1
+  generator_seed: [0, 100]
