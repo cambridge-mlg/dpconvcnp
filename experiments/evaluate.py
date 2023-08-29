@@ -20,7 +20,7 @@ def main():
         plot(
             path=f"{experiment_path}/eval",
             model=model,
-            seed=seed,
+            seed=[0, 0],
             epoch=0,
             batches=batches,
         )
