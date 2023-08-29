@@ -7,23 +7,23 @@ from dpconvcnp.utils import to_tensor, i32
 
 def main():
 
-    model, gens_eval, experiment_path = initialize_evaluation()
+    model, seed, gens_eval, experiment_path = initialize_evaluation()
 
-    breakpoint()
+    for gen in gens_eval:
 
-    seed, result, batches = valid_epoch(
-        seed=[0, 0],
-        model=model,
-        generator=gens_eval[0],
-    )
-    
-    plot(
-        path=f"{experiment_path}/eval",
-        model=model,
-        seed=seed,
-        epoch=0,
-        batches=batches,
-    )
+        seed, result, batches = valid_epoch(
+            seed=seed,
+            model=model,
+            generator=gen,
+        )
+        
+        plot(
+            path=f"{experiment_path}/eval",
+            model=model,
+            seed=seed,
+            epoch=0,
+            batches=batches,
+        )
 
 if __name__ == "__main__":
     main()

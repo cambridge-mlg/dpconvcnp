@@ -7,7 +7,6 @@ from hydra.utils import instantiate
 from datetime import datetime
 import git
 import sys
-import re
 from io import FileIO
 
 import tensorflow as tf
@@ -15,6 +14,7 @@ import tensorflow_probability as tfp
 from tensorboard.summary import Writer
 from tqdm import tqdm
 
+from dpconvcnp.utils import i32
 from dpconvcnp.random import Seed
 from dpconvcnp.data.data import DataGenerator, Batch
 
@@ -153,6 +153,10 @@ def valid_epoch(
         result["gt_mean"].append(gt_mean[:, :, 0])
         result["gt_std"].append(gt_std[:, :, 0])
 
+        result["num_ctx"].append(
+            tf.ones(shape=batch.x_ctx.shape[0], dtype=i32)
+        )
+
         result["kl_diag"].append(
             tf.reduce_mean(
                 gauss_gauss_kl_diag(
@@ -166,12 +170,15 @@ def valid_epoch(
 
         batches.append(batch)
 
-    result["loss"] = tf.reduce_mean(result["loss"])
-    result["kl_diag"] = tf.reduce_mean(result["kl_diag"])
+    result["mean_loss"] = tf.reduce_mean(result["loss"])
+    result["mean_kl_diag"] = tf.reduce_mean(result["kl_diag"])
+
+    result["loss"] = tf.concat(result["loss"], axis=0)
+    result["kl_diag"] = tf.concat(result["kl_diag"], axis=0)
 
     if writer is not None:
-        writer.add_scalar("val/loss", result["loss"], epoch)
-        writer.add_scalar("val/kl_diag", result["kl_diag"], epoch)
+        writer.add_scalar("val/loss", result["mean_loss"], epoch)
+        writer.add_scalar("val/kl_diag", result["mean_kl_diag"], epoch)
 
     return seed, result, batches
 
@@ -330,7 +337,12 @@ def initialize_evaluation():
 
     breakpoint()
 
-    return model, gens_eval, args.experiment_path
+    return (
+        model,
+        evaluation_config.params.seed,
+        gens_eval,
+        args.experiment_path,
+    )
 
 
 def has_commits_ahead(repo: git.Repo) -> bool:
