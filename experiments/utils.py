@@ -160,9 +160,9 @@ def valid_epoch(
                     std_1=gt_std,
                     mean_2=mean,
                     std_2=std,
-                )
-            ),
-            axis=[1, 2],
+                ),
+                axis=[1, 2],
+            )
         )
 
         batches.append(batch)
