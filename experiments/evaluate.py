@@ -6,12 +6,7 @@ from dpconvcnp.utils import to_tensor, i32
 
 def main():
 
-    experiment, path, checkpointer = initialize_evaluation()
-
-    dpconvcnp = experiment.model
-    gens_eval = experiment.generators.eval
-
-
+    model, gens_eval, experiment_path = initialize_evaluation()
 
 
 if __name__ == "__main__":
