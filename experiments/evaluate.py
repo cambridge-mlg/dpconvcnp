@@ -8,6 +8,7 @@ def main():
 
     model, gens_eval, experiment_path = initialize_evaluation()
 
+    breakpoint()
 
     valid_epoch(
         seed=[0, 0],
