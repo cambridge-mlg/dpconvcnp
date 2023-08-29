@@ -322,6 +322,9 @@ def initialize_evaluation():
         model=instantiate(experiment_config.model),
     )
 
+    # Check out previous branch
+    repo.git.checkout("-")
+
     # Load evaluation generators
     gens_eval = instantiate(evaluation_config.generators.eval)
 
