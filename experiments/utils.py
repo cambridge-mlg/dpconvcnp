@@ -153,10 +153,6 @@ def valid_epoch(
         result["gt_mean"].append(gt_mean[:, :, 0])
         result["gt_std"].append(gt_std[:, :, 0])
 
-        result["num_ctx"].append(
-            tf.ones(shape=batch.x_ctx.shape[0], dtype=i32)
-        )
-
         result["kl_diag"].append(
             tf.reduce_mean(
                 gauss_gauss_kl_diag(
