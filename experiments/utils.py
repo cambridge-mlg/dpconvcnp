@@ -21,7 +21,7 @@ from dpconvcnp.data.data import DataGenerator, Batch
 tfd = tfp.distributions
 
 
-@tf.function(experimental_relax_shapes=True) 
+@tf.function(reduce_retracing=True)
 def train_step(
     seed: Seed,
     model: tf.Module,
@@ -91,13 +91,13 @@ def train_epoch(
         )
 
         writer.add_scalar("train/loss", loss, step)
-        writer.add_scalar("lengthscale", model.dpsetconv_encoder.lengthscale, step)
+        #writer.add_scalar("lengthscale", model.dpsetconv_encoder.lengthscale, step)
         
         if not model.dpsetconv_encoder.amortize_y_bound:
-            writer.add_scalar("y_bound", model.dpsetconv_encoder.y_bound(None)[0, 0], step)
+            writer.add_scalar("y_bound", model.dpsetconv_encoder.y_bound(None)[0], step)
 
         if not model.dpsetconv_encoder.amortize_w_noise:
-            writer.add_scalar("w_noise", model.dpsetconv_encoder.w_noise(None)[0, 0], step)
+            writer.add_scalar("w_noise", model.dpsetconv_encoder.w_noise(None)[0], step)
 
         epoch.set_postfix(loss=f"{loss:.4f}")
 
