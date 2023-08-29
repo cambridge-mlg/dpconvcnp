@@ -57,7 +57,7 @@ def train_step(
             epsilon=epsilon,
             delta=delta,
         )
-        loss = tf.reduce_mean(loss) / y_trg.shape[1]
+        loss = tf.reduce_mean(loss)
 
     gradients = tape.gradient(loss, model.trainable_variables)
     optimizer.apply_gradients(zip(gradients, model.trainable_variables))
@@ -146,7 +146,7 @@ def valid_epoch(
             y_trg=batch.y_trg,
         )
 
-        result["loss"].append(tf.reduce_mean(loss) / batch.y_trg.shape[1])
+        result["loss"].append(tf.reduce_mean(loss, axis=[1, 2]))
         result["pred_mean"].append(mean[:, :, 0])
         result["pred_std"].append(std[:, :, 0])
 
@@ -161,7 +161,8 @@ def valid_epoch(
                     mean_2=mean,
                     std_2=std,
                 )
-            )
+            ),
+            axis=[1, 2],
         )
 
         batches.append(batch)
