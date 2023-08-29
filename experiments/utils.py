@@ -339,7 +339,7 @@ def initialize_evaluation():
 
     return (
         model,
-        evaluation_config.params.seed,
+        evaluation_config.params.evaluation_seed,
         gens_eval,
         args.experiment_path,
     )
