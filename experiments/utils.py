@@ -326,7 +326,7 @@ def initialize_evaluation():
     repo.git.checkout("-")
 
     # Load evaluation generators
-    gens_eval = instantiate(evaluation_config.generators.eval)
+    gens_eval = instantiate(evaluation_config.generators)
 
     return model, gens_eval, args.experiment_path
 
