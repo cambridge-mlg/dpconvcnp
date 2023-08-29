@@ -327,11 +327,12 @@ def initialize_evaluation():
     repo.git.checkout("-")
 
     # Load evaluation generators
-    gens_eval = instantiate(evaluation_config.generators)
+    model = instantiate(experiment_config).model
+    gens_eval = instantiate(evaluation_config).generators
 
     breakpoint()
 
-    return experiment_config.model, gens_eval, args.experiment_path
+    return model, gens_eval, args.experiment_path
 
 
 def has_commits_ahead(repo: git.Repo) -> bool:
