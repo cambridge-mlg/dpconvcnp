@@ -314,7 +314,7 @@ def initialize_evaluation():
     evaluation_config = OmegaConf.load(args.evaluation_config)
 
     # Check out commit hash -- only the model is loaded using this hash
-    repo.git.checkout(experiment_config.commit)
+    repo.git.checkout(f"{experiment_config.commit} dpconvcnp")
 
     # Create model checkpointer and load model
     checkpointer = ModelCheckpointer(
