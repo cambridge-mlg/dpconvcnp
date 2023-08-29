@@ -12,7 +12,7 @@ def main():
     for gen in gens_eval:
 
         seed, result, batches = valid_epoch(
-            seed=seed,
+            seed=[0, 0],
             model=model,
             generator=gen,
         )
