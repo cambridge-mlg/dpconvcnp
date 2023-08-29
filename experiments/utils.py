@@ -318,10 +318,10 @@ def initialize_evaluation():
         path=f"{args.experiment_path}/checkpoints",
     )
 
-    # Load model weights
-    checkpointer.load_best_checkpoint(
-        model=instantiate(experiment_config.model),
-    )
+    ## Load model weights
+    #checkpointer.load_best_checkpoint(
+    #    model=instantiate(experiment_config.model),
+    #)
 
     ## Check out previous branch
     #repo.git.checkout("-")
