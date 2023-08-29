@@ -309,7 +309,7 @@ def initialize_evaluation():
     experiment_config = OmegaConf.load(f"{args.experiment_path}/config.yml")
     evaluation_config = OmegaConf.load(args.evaluation_config)
 
-    # Check out commit hash
+    # Check out commit hash -- only the model is loaded using this hash
     repo.git.checkout(experiment_config.commit)
 
     # Create model checkpointer and load model
