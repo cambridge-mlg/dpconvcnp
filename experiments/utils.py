@@ -310,7 +310,7 @@ def initialize_evaluation():
     evaluation_config = OmegaConf.load(args.evaluation_config)
 
     # Check out commit hash
-    commit_hash = experiment_config.commit
+    repo.git.checkout(experiment_config.commit)
 
     # Create model checkpointer and load model
     checkpointer = ModelCheckpointer(
