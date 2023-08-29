@@ -323,8 +323,8 @@ def initialize_evaluation():
         model=instantiate(experiment_config.model),
     )
 
-    # Check out previous branch
-    repo.git.checkout("-")
+    ## Check out previous branch
+    #repo.git.checkout("-")
 
     # Load evaluation generators
     model = instantiate(experiment_config).model
