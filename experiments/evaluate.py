@@ -6,17 +6,15 @@ from dpconvcnp.utils import to_tensor, i32
 
 
 def main():
-
     model, seed, gens_eval, experiment_path = initialize_evaluation()
 
     for gen in gens_eval:
-
         seed, result, batches = valid_epoch(
-            seed=seed,
+            seed=[0, 0],
             model=model,
             generator=gen,
         )
-        
+
         plot(
             path=f"{experiment_path}/eval",
             model=model,
@@ -24,6 +22,7 @@ def main():
             epoch=0,
             batches=batches,
         )
+
 
 if __name__ == "__main__":
     main()
