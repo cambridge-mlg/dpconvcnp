@@ -329,6 +329,8 @@ def initialize_evaluation():
     # Load evaluation generators
     gens_eval = instantiate(evaluation_config.generators)
 
+    breakpoint()
+
     return experiment_config.model, gens_eval, args.experiment_path
 
 
