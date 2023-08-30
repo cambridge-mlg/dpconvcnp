@@ -13,8 +13,9 @@ import tensorflow as tf
 import tensorflow_probability as tfp
 from tensorboard.summary import Writer
 from tqdm import tqdm
+import numpy as np
+import pandas as pd
 
-from dpconvcnp.utils import i32
 from dpconvcnp.random import Seed
 from dpconvcnp.data.data import DataGenerator, Batch
 
@@ -57,7 +58,7 @@ def train_step(
             epsilon=epsilon,
             delta=delta,
         )
-        loss = tf.reduce_mean(loss)
+        loss = tf.reduce_mean(loss) / y_trg.shape[1]
 
     gradients = tape.gradient(loss, model.trainable_variables)
     optimizer.apply_gradients(zip(gradients, model.trainable_variables))
@@ -146,6 +147,8 @@ def valid_epoch(
             y_trg=batch.y_trg,
         )
 
+        loss = loss / batch.y_trg.shape[1]
+
         result["loss"].append(loss)
         result["pred_mean"].append(mean[:, :, 0])
         result["pred_std"].append(std[:, :, 0])
@@ -173,11 +176,58 @@ def valid_epoch(
     result["loss"] = tf.concat(result["loss"], axis=0)
     result["kl_diag"] = tf.concat(result["kl_diag"], axis=0)
 
+    result["epsilon"] = tf.concat([b.epsilon for b in batches], axis=0)
+    result["delta"] = tf.concat([b.delta for b in batches], axis=0)
+
     if writer is not None:
         writer.add_scalar("val/loss", result["mean_loss"], epoch)
         writer.add_scalar("val/kl_diag", result["mean_kl_diag"], epoch)
 
     return seed, result, batches
+
+
+def evaluation_summary(
+    path: str,
+    evaluation_result: Dict[str, tf.Tensor],
+    batches: List[Batch],
+):
+    # Get batch information
+    batch_info = [
+        get_batch_info(batch, idx)
+        for batch in batches
+        for idx in range(len(batch.x_ctx))
+    ]
+
+    num_ctx = np.array(
+        [
+            batch.x_ctx.shape[1]
+            for batch in batches
+            for _ in range(len(batch.x_ctx))
+        ]
+    )
+
+    lengthscale = np.array(
+        [
+            batch.gt_pred.kernel.lengthscales.numpy()
+            for batch in batches
+            for _ in range(len(batch.x_ctx))
+        ]
+    )
+
+    # Make dataframe
+    df = pd.DataFrame(
+        {
+            "loss": evaluation_result["loss"].numpy(),
+            "kl_diag": evaluation_result["kl_diag"].numpy(),
+            "epsilon": evaluation_result["epsilon"].numpy(),
+            "delta": evaluation_result["delta"].numpy(),
+            "n": num_ctx,
+            "lengthscale": lengthscale,
+        }
+    )
+
+    # Save dataframe
+    df.to_csv(f"{path}/metrics.csv", index=False)
 
 
 class ModelCheckpointer:
@@ -237,7 +287,7 @@ def gauss_gauss_kl_diag(
 def initialize_experiment() -> (
     Tuple[DictConfig, str, str, Writer, ModelCheckpointer]
 ):
-    """Initialise experiment by parsing the config file, checking that the
+    """Initialize experiment by parsing the config file, checking that the
     repo is clean, creating a path for the experiment, and creating a
     writer for tensorboard.
 
@@ -264,7 +314,7 @@ def initialize_experiment() -> (
         repo
     ), "Repo has commits ahead, please push changes."
 
-    # Initialise experiment, make path and writer
+    # Initialize experiment, make path and writer
     OmegaConf.register_new_resolver("eval", eval)
     config = OmegaConf.load(args.config)
     config_changes = OmegaConf.from_cli(config_changes)
@@ -309,35 +359,34 @@ def initialize_evaluation():
         repo
     ), "Repo has commits ahead, please push changes."
 
-    # Initialise experiment, make path and writer
+    # Initialize experiment, make path and writer
     OmegaConf.register_new_resolver("eval", eval)
     experiment_config = OmegaConf.load(f"{args.experiment_path}/config.yml")
     evaluation_config = OmegaConf.load(args.evaluation_config)
+    experiment = instantiate(experiment_config)
+    evaluation = instantiate(evaluation_config)
 
-    # Check out commit hash -- only the model is loaded using this hash
-    repo.git.checkout(f"{experiment_config.commit}", "dpconvcnp")
+    ## Check out commit hash -- only the model is loaded using this hash
+    # repo.git.checkout(f"{experiment_config.commit}", "dpconvcnp")
 
     # Create model checkpointer and load model
     checkpointer = ModelCheckpointer(
         path=f"{args.experiment_path}/checkpoints",
     )
 
-    # Load evaluation generators
-    model = instantiate(experiment_config).model
-    gens_eval = instantiate(evaluation_config).generators
+    # Set model
+    model = experiment.model
 
     # Load model weights
-    checkpointer.load_last_checkpoint(model=model)
+    checkpointer.load_best_checkpoint(model=model)
 
     ## Check out previous branch
     # repo.git.checkout("-")
 
-    breakpoint()
-
     return (
         model,
-        evaluation_config.params.evaluation_seed,
-        gens_eval,
+        list(evaluation.params.evaluation_seed),
+        evaluation.generators,
         args.experiment_path,
     )
 
@@ -380,7 +429,7 @@ def get_current_commit_hash(repo: git.Repo) -> str:
 
 
 def make_experiment_path(experiment: DictConfig) -> str:
-    """Parse initialised experiment config and make up a path
+    """Parse initialized experiment config and make up a path
     for the experiment, and create it if it doesn't exist,
     otherwise raise an error. Finally return the path.
 
@@ -425,3 +474,20 @@ def tee_to_file(log_file_path: str):
 
     sys.stdout = Logger(log_file)
     sys.stderr = Logger(log_file)
+
+
+def get_batch_info(batch: Batch, idx: int) -> tf.Tensor:
+    n = batch.x_ctx.shape[1]
+    epsilon = batch.epsilon[idx].numpy()
+    delta = batch.delta[idx].numpy()
+    lengthscale = batch.gt_pred.kernel.lengthscales.numpy()
+
+    info = {
+        "n": n,
+        "epsilon": epsilon,
+        "delta": delta,
+        "lengthscale": lengthscale,
+        "nle": n * lengthscale * epsilon,
+    }
+
+    return info

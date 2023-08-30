@@ -10,6 +10,7 @@ import tensorflow_probability as tfp
 from dpconvcnp.random import Seed
 from dpconvcnp.data.data import Batch
 from dpconvcnp.utils import to_tensor, f32
+from utils import get_batch_info
 
 tfd = tfp.distributions
 
@@ -21,8 +22,8 @@ def plot(
     path: str,
     model: tf.Module,
     seed: Seed,
-    epoch: int,
     batches: List[Batch],
+    epoch: int = 0,
     num_fig: int = 5,
     figsize: Tuple[float, float] = (8., 6.),
     x_range: Tuple[float, float] = (-5., 5.),
@@ -144,20 +145,3 @@ def plot(
     else:
         raise NotImplementedError
     
-
-def get_batch_info(batch: Batch, idx: int) -> tf.Tensor:
-
-    n = batch.x_ctx.shape[1]
-    epsilon = batch.epsilon[idx].numpy()
-    delta = batch.delta[idx].numpy()
-    lengthscale = batch.gt_pred.kernel.lengthscales.numpy()
-
-    info = {
-        "n": n,
-        "epsilon": epsilon,
-        "delta": delta,
-        "lengthscale": lengthscale,
-        "nle": n * lengthscale * epsilon,
-    }
-
-    return info
