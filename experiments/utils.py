@@ -346,7 +346,7 @@ def initialize_evaluation():
     parser.add_argument("--experiment_path", type=str)
     parser.add_argument("--evaluation_config", type=str)
     parser.add_argument("--debug", action="store_true")
-    args, _ = parser.parse_known_args()
+    args, config_changes = parser.parse_known_args()
 
     # Create a repo object and check if local repo is clean
     repo = git.Repo(search_parent_directories=True)
@@ -362,7 +362,11 @@ def initialize_evaluation():
     # Initialize experiment, make path and writer
     OmegaConf.register_new_resolver("eval", eval)
     experiment_config = OmegaConf.load(f"{args.experiment_path}/config.yml")
-    evaluation_config = OmegaConf.load(args.evaluation_config)
+    evaluation_config = OmegaConf.merge(
+        OmegaConf.load(args.evaluation_config),
+        OmegaConf.from_cli(config_changes),
+    )
+    print(evaluation_config)
     experiment = instantiate(experiment_config)
     evaluation = instantiate(evaluation_config)
 
@@ -383,11 +387,19 @@ def initialize_evaluation():
     ## Check out previous branch
     # repo.git.checkout("-")
 
+    experiment_path = args.experiment_path
+    eval_name = evaluation.params.eval_name
+
+    assert evaluation.params.eval_name is not None
+    if not os.path.exists(f"{experiment_path}/eval/{eval_name}"):
+        os.makedirs(f"{experiment_path}/eval/{eval_name}")
+
     return (
         model,
         list(evaluation.params.evaluation_seed),
-        evaluation.generators,
-        args.experiment_path,
+        evaluation.generator,
+        experiment_path,
+        eval_name,
     )
 
 

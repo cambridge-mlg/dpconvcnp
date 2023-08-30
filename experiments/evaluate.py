@@ -3,7 +3,13 @@ from plot import plot
 
 
 def main():
-    model, base_seed, generator, experiment_path = initialize_evaluation()
+    (
+        model,
+        base_seed,
+        generator,
+        experiment_path,
+        eval_name,
+    ) = initialize_evaluation()
 
     seed = base_seed
     seed, result, batches = valid_epoch(
@@ -13,14 +19,14 @@ def main():
     )
 
     plot(
-        path=f"{experiment_path}/eval",
+        path=f"{experiment_path}/eval/{eval_name}",
         model=model,
         seed=base_seed,
         batches=batches,
     )
 
     evaluation_summary(
-        path=f"{experiment_path}/eval",
+        path=f"{experiment_path}/eval/{eval_name}",
         evaluation_result=result,
         batches=batches,
     )

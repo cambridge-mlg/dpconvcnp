@@ -12,7 +12,7 @@ generator:
   max_num_trg: 512
   context_range: [[-2.0, 2.0]]
   target_range: [[-3.0, 3.0]]
-  samples_per_epoch: 16384
+  samples_per_epoch: 4048
   batch_size: 16
   min_epsilon: ${params.min_eps}
   max_epsilon: ${params.max_eps}
@@ -24,3 +24,8 @@ params:
   dim: 1
   generator_seed: [0, 100]
   evaluation_seed: [0, 110]
+  min_log10_ell: -0.602
+  max_log10_ell: -0.602
+  min_eps: 1.0
+  max_eps: 1.0
+  eval_name: null
