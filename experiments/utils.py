@@ -123,7 +123,7 @@ def valid_epoch(
         "pred_std": [],
         "gt_mean": [],
         "gt_std": [],
-        "gt_loglik": [],
+        "gt_loss": [],
     }
 
     batches = []
