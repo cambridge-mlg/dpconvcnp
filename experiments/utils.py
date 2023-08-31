@@ -123,6 +123,7 @@ def valid_epoch(
         "pred_std": [],
         "gt_mean": [],
         "gt_std": [],
+        "gt_loglik": [],
     }
 
     batches = []
@@ -140,7 +141,7 @@ def valid_epoch(
             delta=batch.delta,
         )
 
-        gt_mean, gt_std, _ = batch.gt_pred(
+        gt_mean, gt_std, gt_log_lik = batch.gt_pred(
             x_ctx=batch.x_ctx,
             y_ctx=batch.y_ctx,
             x_trg=batch.x_trg,
@@ -155,6 +156,7 @@ def valid_epoch(
 
         result["gt_mean"].append(gt_mean[:, :, 0])
         result["gt_std"].append(gt_std[:, :, 0])
+        result["gt_loss"].append(-gt_log_lik)
 
         result["kl_diag"].append(
             tf.reduce_mean(
@@ -175,6 +177,7 @@ def valid_epoch(
 
     result["loss"] = tf.concat(result["loss"], axis=0)
     result["kl_diag"] = tf.concat(result["kl_diag"], axis=0)
+    result["gt_loss"] = tf.concat(result["gt_loss"], axis=0)
 
     result["epsilon"] = tf.concat([b.epsilon for b in batches], axis=0)
     result["delta"] = tf.concat([b.delta for b in batches], axis=0)
@@ -218,6 +221,7 @@ def evaluation_summary(
     df = pd.DataFrame(
         {
             "loss": evaluation_result["loss"].numpy(),
+            "gt_loss": evaluation_result["gt_loss"].numpy(),
             "kl_diag": evaluation_result["kl_diag"].numpy(),
             "epsilon": evaluation_result["epsilon"].numpy(),
             "delta": evaluation_result["delta"].numpy(),
