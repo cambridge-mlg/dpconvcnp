@@ -149,6 +149,7 @@ def valid_epoch(
         )
 
         loss = loss / batch.y_trg.shape[1]
+        gt_loss = -gt_log_lik / batch.y_trg.shape[1]
 
         result["loss"].append(loss)
         result["pred_mean"].append(mean[:, :, 0])
@@ -156,7 +157,7 @@ def valid_epoch(
 
         result["gt_mean"].append(gt_mean[:, :, 0])
         result["gt_std"].append(gt_std[:, :, 0])
-        result["gt_loss"].append(-gt_log_lik)
+        result["gt_loss"].append(gt_loss)
 
         result["kl_diag"].append(
             tf.reduce_mean(
