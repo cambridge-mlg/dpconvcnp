@@ -356,16 +356,16 @@ def initialize_evaluation():
     parser.add_argument("--debug", action="store_true")
     args, config_changes = parser.parse_known_args()
 
-    # Create a repo object and check if local repo is clean
-    repo = git.Repo(search_parent_directories=True)
+    ## Create a repo object and check if local repo is clean
+    #repo = git.Repo(search_parent_directories=True)
 
-    # Check that the repo is clean
-    assert (
-        args.debug or not repo.is_dirty()
-    ), "Repo is dirty, please commit changes."
-    assert args.debug or not has_commits_ahead(
-        repo
-    ), "Repo has commits ahead, please push changes."
+    ## Check that the repo is clean
+    #assert (
+    #    args.debug or not repo.is_dirty()
+    #), "Repo is dirty, please commit changes."
+    #assert args.debug or not has_commits_ahead(
+    #    repo
+    #), "Repo has commits ahead, please push changes."
 
     # Initialize experiment, make path and writer
     OmegaConf.register_new_resolver("eval", eval)
@@ -374,12 +374,11 @@ def initialize_evaluation():
         OmegaConf.load(args.evaluation_config),
         OmegaConf.from_cli(config_changes),
     )
-    print(evaluation_config)
     experiment = instantiate(experiment_config)
     evaluation = instantiate(evaluation_config)
 
     ## Check out commit hash -- only the model is loaded using this hash
-    # repo.git.checkout(f"{experiment_config.commit}", "dpconvcnp")
+    #repo.git.checkout(f"{experiment_config.commit}", "dpconvcnp")
 
     # Create model checkpointer and load model
     checkpointer = ModelCheckpointer(
@@ -391,9 +390,6 @@ def initialize_evaluation():
 
     # Load model weights
     checkpointer.load_best_checkpoint(model=model)
-
-    ## Check out previous branch
-    # repo.git.checkout("-")
 
     experiment_path = args.experiment_path
     eval_name = evaluation.params.eval_name
