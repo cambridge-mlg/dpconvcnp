@@ -65,7 +65,7 @@ dpsetconv:
 
 conv_net:
   _target_: dpconvcnp.model.conv.UNet
-  first_channels: 16
+  first_channels: 32
   last_channels: 2
   kernel_size: 5
   num_channels: [32, 32, 32, 32, 32]

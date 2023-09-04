@@ -1,4 +1,4 @@
-from typing import Tuple, Dict, List
+from typing import Tuple, Dict, List, Optional
 import argparse
 import os
 import yaml
@@ -7,13 +7,14 @@ from hydra.utils import instantiate
 from datetime import datetime
 import git
 import sys
-import re
 from io import FileIO
 
 import tensorflow as tf
 import tensorflow_probability as tfp
 from tensorboard.summary import Writer
 from tqdm import tqdm
+import numpy as np
+import pandas as pd
 
 from dpconvcnp.random import Seed
 from dpconvcnp.data.data import DataGenerator, Batch
@@ -47,7 +48,6 @@ def train_step(
         loss: negative log likelihood.
     """
 
-
     with tf.GradientTape() as tape:
         seed, loss, _, _ = model.loss(
             seed=seed,
@@ -74,7 +74,6 @@ def train_epoch(
     writer: Writer,
     step: int,
 ) -> Tuple[Seed, int]:
-
     epoch = tqdm(generator, total=generator.num_batches, desc="Training")
 
     for batch in epoch:
@@ -91,13 +90,17 @@ def train_epoch(
         )
 
         writer.add_scalar("train/loss", loss, step)
-        #writer.add_scalar("lengthscale", model.dpsetconv_encoder.lengthscale, step)
-        
+        # writer.add_scalar("lengthscale", model.dpsetconv_encoder.lengthscale, step)
+
         if not model.dpsetconv_encoder.amortize_y_bound:
-            writer.add_scalar("y_bound", model.dpsetconv_encoder.y_bound(None)[0], step)
+            writer.add_scalar(
+                "y_bound", model.dpsetconv_encoder.y_bound(None)[0], step
+            )
 
         if not model.dpsetconv_encoder.amortize_w_noise:
-            writer.add_scalar("w_noise", model.dpsetconv_encoder.w_noise(None)[0], step)
+            writer.add_scalar(
+                "w_noise", model.dpsetconv_encoder.w_noise(None)[0], step
+            )
 
         epoch.set_postfix(loss=f"{loss:.4f}")
 
@@ -110,10 +113,9 @@ def valid_epoch(
     seed: Seed,
     model: tf.Module,
     generator: DataGenerator,
-    writer: Writer,
-    epoch: int,
+    epoch: Optional[int] = None,
+    writer: Optional[Writer] = None,
 ) -> Tuple[Seed, Dict[str, tf.Tensor], List[Batch]]:
-
     result = {
         "kl_diag": [],
         "loss": [],
@@ -121,11 +123,14 @@ def valid_epoch(
         "pred_std": [],
         "gt_mean": [],
         "gt_std": [],
+        "gt_loss": [],
     }
 
     batches = []
 
-    for batch in tqdm(generator, total=generator.num_batches, desc="Validation"):
+    for batch in tqdm(
+        generator, total=generator.num_batches, desc="Validation"
+    ):
         seed, loss, mean, std = model.loss(
             seed=seed,
             x_ctx=batch.x_ctx,
@@ -136,19 +141,23 @@ def valid_epoch(
             delta=batch.delta,
         )
 
-        gt_mean, gt_std, _ = batch.gt_pred(
+        gt_mean, gt_std, gt_log_lik = batch.gt_pred(
             x_ctx=batch.x_ctx,
             y_ctx=batch.y_ctx,
             x_trg=batch.x_trg,
             y_trg=batch.y_trg,
         )
 
-        result["loss"].append(tf.reduce_mean(loss) / batch.y_trg.shape[1])
+        loss = loss / batch.y_trg.shape[1]
+        gt_loss = -gt_log_lik / batch.y_trg.shape[1]
+
+        result["loss"].append(loss)
         result["pred_mean"].append(mean[:, :, 0])
         result["pred_std"].append(std[:, :, 0])
 
         result["gt_mean"].append(gt_mean[:, :, 0])
         result["gt_std"].append(gt_std[:, :, 0])
+        result["gt_loss"].append(gt_loss)
 
         result["kl_diag"].append(
             tf.reduce_mean(
@@ -157,23 +166,77 @@ def valid_epoch(
                     std_1=gt_std,
                     mean_2=mean,
                     std_2=std,
-                )
+                ),
+                axis=[1, 2],
             )
         )
 
         batches.append(batch)
 
-    result["loss"] = tf.reduce_mean(result["loss"])
-    result["kl_diag"] = tf.reduce_mean(result["kl_diag"])
+    result["mean_loss"] = tf.reduce_mean(result["loss"])
+    result["std_loss"] = tf.math.reduce_std(result["loss"])
+    result["mean_kl_diag"] = tf.reduce_mean(result["kl_diag"])
 
-    writer.add_scalar("val/loss", result["loss"], epoch)
-    writer.add_scalar("val/kl_diag", result["kl_diag"], epoch)
+    result["loss"] = tf.concat(result["loss"], axis=0)
+    result["kl_diag"] = tf.concat(result["kl_diag"], axis=0)
+    result["gt_loss"] = tf.concat(result["gt_loss"], axis=0)
+
+    result["epsilon"] = tf.concat([b.epsilon for b in batches], axis=0)
+    result["delta"] = tf.concat([b.delta for b in batches], axis=0)
+
+    if writer is not None:
+        writer.add_scalar("val/loss", result["mean_loss"], epoch)
+        writer.add_scalar("val/kl_diag", result["mean_kl_diag"], epoch)
 
     return seed, result, batches
-    
+
+
+def evaluation_summary(
+    path: str,
+    evaluation_result: Dict[str, tf.Tensor],
+    batches: List[Batch],
+):
+    # Get batch information
+    batch_info = [
+        get_batch_info(batch, idx)
+        for batch in batches
+        for idx in range(len(batch.x_ctx))
+    ]
+
+    num_ctx = np.array(
+        [
+            batch.x_ctx.shape[1]
+            for batch in batches
+            for _ in range(len(batch.x_ctx))
+        ]
+    )
+
+    lengthscale = np.array(
+        [
+            batch.gt_pred.kernel.lengthscales.numpy()
+            for batch in batches
+            for _ in range(len(batch.x_ctx))
+        ]
+    )
+
+    # Make dataframe
+    df = pd.DataFrame(
+        {
+            "loss": evaluation_result["loss"].numpy(),
+            "gt_loss": evaluation_result["gt_loss"].numpy(),
+            "kl_diag": evaluation_result["kl_diag"].numpy(),
+            "epsilon": evaluation_result["epsilon"].numpy(),
+            "delta": evaluation_result["delta"].numpy(),
+            "n": num_ctx,
+            "lengthscale": lengthscale,
+        }
+    )
+
+    # Save dataframe
+    df.to_csv(f"{path}/metrics.csv", index=False)
+
 
 class ModelCheckpointer:
-
     def __init__(self, path: str):
         self.path = path
         self.best_validation_loss = float("inf")
@@ -189,17 +252,18 @@ class ModelCheckpointer:
             model: model to save.
             valid_result: validation result dictionary.
         """
-        
-        if valid_result["loss"] < self.best_validation_loss:
-            self.best_validation_loss = valid_result["loss"]
+
+        loss_ci = valid_result["mean_loss"] + 1.96 * valid_result["std_loss"]
+
+        if loss_ci < self.best_validation_loss:
+            self.best_validation_loss = loss_ci
             model.save_weights(f"{self.path}/best")
 
         model.save_weights(f"{self.path}/last")
 
-
     def load_best_checkpoint(self, model: tf.Module) -> None:
         model.load_weights(f"{self.path}/best")
-    
+
     def load_last_checkpoint(self, model: tf.Module) -> None:
         model.load_weights(f"{self.path}/last")
 
@@ -228,8 +292,10 @@ def gauss_gauss_kl_diag(
     return tfd.kl_divergence(dist_1, dist_2)
 
 
-def initialize_experiment() -> Tuple[DictConfig, str, str, Writer, ModelCheckpointer]:
-    """Initialise experiment by parsing the config file, checking that the
+def initialize_experiment() -> (
+    Tuple[DictConfig, str, str, Writer, ModelCheckpointer]
+):
+    """Initialize experiment by parsing the config file, checking that the
     repo is clean, creating a path for the experiment, and creating a
     writer for tensorboard.
 
@@ -249,19 +315,19 @@ def initialize_experiment() -> Tuple[DictConfig, str, str, Writer, ModelCheckpoi
     repo = git.Repo(search_parent_directories=True)
 
     # Check that the repo is clean
-    assert args.debug or not repo.is_dirty(), (
-        "Repo is dirty, please commit changes."
-    )
-    assert args.debug or not has_commits_ahead(repo), (
-        "Repo has commits ahead, please push changes."
-    )
+    assert (
+        args.debug or not repo.is_dirty()
+    ), "Repo is dirty, please commit changes."
+    assert args.debug or not has_commits_ahead(
+        repo
+    ), "Repo has commits ahead, please push changes."
 
-    # Initialise experiment, make path and writer
+    # Initialize experiment, make path and writer
     OmegaConf.register_new_resolver("eval", eval)
     config = OmegaConf.load(args.config)
     config_changes = OmegaConf.from_cli(config_changes)
 
-    config = OmegaConf.merge(config, config_changes) 
+    config = OmegaConf.merge(config, config_changes)
     experiment = instantiate(config)
     path = make_experiment_path(experiment)
     writer = Writer(f"{path}/logs")
@@ -272,7 +338,7 @@ def initialize_experiment() -> Tuple[DictConfig, str, str, Writer, ModelCheckpoi
         config = OmegaConf.to_container(config)
         config.update({"commit": hash})
         yaml.dump(config, file, indent=4, sort_keys=False)
-    
+
     # Set path for logging training output messages
     log_path = f"{path}/stdout.txt"
 
@@ -282,9 +348,68 @@ def initialize_experiment() -> Tuple[DictConfig, str, str, Writer, ModelCheckpoi
     return experiment, path, log_path, writer, model_checkpointer
 
 
+def initialize_evaluation():
+    # Make argument parser with just the config argument
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--experiment_path", type=str)
+    parser.add_argument("--evaluation_config", type=str)
+    parser.add_argument("--debug", action="store_true")
+    args, config_changes = parser.parse_known_args()
+
+    ## Create a repo object and check if local repo is clean
+    #repo = git.Repo(search_parent_directories=True)
+
+    ## Check that the repo is clean
+    #assert (
+    #    args.debug or not repo.is_dirty()
+    #), "Repo is dirty, please commit changes."
+    #assert args.debug or not has_commits_ahead(
+    #    repo
+    #), "Repo has commits ahead, please push changes."
+
+    # Initialize experiment, make path and writer
+    OmegaConf.register_new_resolver("eval", eval)
+    experiment_config = OmegaConf.load(f"{args.experiment_path}/config.yml")
+    evaluation_config = OmegaConf.merge(
+        OmegaConf.load(args.evaluation_config),
+        OmegaConf.from_cli(config_changes),
+    )
+    experiment = instantiate(experiment_config)
+    evaluation = instantiate(evaluation_config)
+
+    ## Check out commit hash -- only the model is loaded using this hash
+    #repo.git.checkout(f"{experiment_config.commit}", "dpconvcnp")
+
+    # Create model checkpointer and load model
+    checkpointer = ModelCheckpointer(
+        path=f"{args.experiment_path}/checkpoints",
+    )
+
+    # Set model
+    model = experiment.model
+
+    # Load model weights
+    checkpointer.load_best_checkpoint(model=model)
+
+    experiment_path = args.experiment_path
+    eval_name = evaluation.params.eval_name
+
+    assert evaluation.params.eval_name is not None
+    if not os.path.exists(f"{experiment_path}/eval/{eval_name}"):
+        os.makedirs(f"{experiment_path}/eval/{eval_name}")
+
+    return (
+        model,
+        list(evaluation.params.evaluation_seed),
+        evaluation.generator,
+        experiment_path,
+        eval_name,
+    )
+
+
 def has_commits_ahead(repo: git.Repo) -> bool:
     """Check if there are commits ahead in the local current branch.
-    
+
     Arguments:
         repo: git repo object.
 
@@ -297,7 +422,9 @@ def has_commits_ahead(repo: git.Repo) -> bool:
 
     else:
         current_branch = repo.active_branch.name
-        commits = list(repo.iter_commits(f"origin/{current_branch}..{current_branch}"))
+        commits = list(
+            repo.iter_commits(f"origin/{current_branch}..{current_branch}")
+        )
         return len(commits) > 0
 
 
@@ -318,7 +445,7 @@ def get_current_commit_hash(repo: git.Repo) -> str:
 
 
 def make_experiment_path(experiment: DictConfig) -> str:
-    """Parse initialised experiment config and make up a path
+    """Parse initialized experiment config and make up a path
     for the experiment, and create it if it doesn't exist,
     otherwise raise an error. Finally return the path.
 
@@ -328,10 +455,11 @@ def make_experiment_path(experiment: DictConfig) -> str:
     Returns:
         experiment_path: path to the experiment.
     """
-    
+
     path = os.path.join(
         experiment.misc.results_root,
-        experiment.misc.experiment_name or datetime.now().strftime("%m-%d-%H-%M-%S"),
+        experiment.misc.experiment_name
+        or datetime.now().strftime("%m-%d-%H-%M-%S"),
     )
 
     if not os.path.exists(path):
@@ -343,18 +471,16 @@ def make_experiment_path(experiment: DictConfig) -> str:
 
     return path
 
+
 def tee_to_file(log_file_path: str):
-    log_file = open(log_file_path, 'a')
+    log_file = open(log_file_path, "a")
 
     class Logger(object):
-
         def __init__(self, file: FileIO):
             self.terminal = sys.stdout
             self.log_file = file
 
-
         def write(self, message: str):
-
             self.terminal.write(message)
             self.log_file.write(message)
 
@@ -364,3 +490,20 @@ def tee_to_file(log_file_path: str):
 
     sys.stdout = Logger(log_file)
     sys.stderr = Logger(log_file)
+
+
+def get_batch_info(batch: Batch, idx: int) -> tf.Tensor:
+    n = batch.x_ctx.shape[1]
+    epsilon = batch.epsilon[idx].numpy()
+    delta = batch.delta[idx].numpy()
+    lengthscale = batch.gt_pred.kernel.lengthscales.numpy()
+
+    info = {
+        "n": n,
+        "epsilon": epsilon,
+        "delta": delta,
+        "lengthscale": lengthscale,
+        "nle": n * lengthscale * epsilon,
+    }
+
+    return info

@@ -50,6 +50,7 @@ class DataGenerator(ABC):
         max_epsilon: float,
         min_log10_delta: float,
         max_log10_delta: float,
+        name: str = "DataGenerator",
     ):
         """Base data generator, which can be used to derive other data generators,
         such as synthetic generators or real data generators.
@@ -62,8 +63,9 @@ class DataGenerator(ABC):
             max_epsilon: Maximum DP epsilon.
             min_log10_delta: Minimum log10 DP delta.
             max_log10_delta: Maximum log10 DP delta.
+            name: Name of data generator.
         """
-
+        
         # Set random seed for generator
         self.seed = seed
 
@@ -80,6 +82,9 @@ class DataGenerator(ABC):
 
         # Set epoch counter
         self.i = 0
+
+        # Set generator name
+        self.name = name
 
     def __iter__(self):
         """Reset epoch counter and return self."""
