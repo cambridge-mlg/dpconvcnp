@@ -5,6 +5,7 @@ from dpconvcnp.utils import to_tensor
 
 Seed = Union[tf.Tensor, Tuple[tf.Tensor], Tuple[int]]
 
+
 def randint(
     shape: tf.TensorShape,
     seed: tf.Tensor,
@@ -26,15 +27,20 @@ def randint(
         rand: Random integers in the range `[minval, maxval]`.
     """
 
-    assert minval.dtype == maxval.dtype, "minval and maxval must have the same dtype"
-    assert minval.dtype in [tf.int32, tf.int64], f"Invalid dtype: {minval.dtype=}"
+    assert (
+        minval.dtype == maxval.dtype
+    ), "minval and maxval must have the same dtype"
+    assert minval.dtype in [
+        tf.int32,
+        tf.int64,
+    ], f"Invalid dtype: {minval.dtype=}"
 
     seed, next_seed = tf.random.split(seed, num=2)
     return next_seed, tf.random.stateless_uniform(
         shape=shape,
         seed=seed,
         minval=minval,
-        maxval=maxval+1,
+        maxval=maxval + 1,
         dtype=minval.dtype,
     )
 
@@ -60,10 +66,16 @@ def randu(
         rand: Random uniforms in the range `[minval, maxval]`.
     """
 
-    assert minval.dtype == maxval.dtype, "minval and maxval must have the same dtype"
-    assert minval.dtype in [tf.float32, tf.float64], f"Invalid dtype: {minval.dtype=}"
-    
+    assert (
+        minval.dtype == maxval.dtype
+    ), "minval and maxval must have the same dtype"
+    assert minval.dtype in [
+        tf.float32,
+        tf.float64,
+    ], f"Invalid dtype: {minval.dtype=}"
+
     seed, next_seed = tf.random.split(seed, num=2)
+
     return next_seed, tf.random.stateless_uniform(
         shape=shape,
         seed=seed,
@@ -94,9 +106,15 @@ def randn(
         rand: Random normals with mean `loc` and standard deviation `scale`.
     """
 
-    assert mean.dtype == stddev.dtype, "mean and stddev must have the same dtype"
-    assert mean.dtype in [tf.float32, tf.float64], f"Invalid dtype: {mean.dtype=}"
-    
+    assert (
+        mean.dtype == stddev.dtype
+    ), "mean and stddev must have the same dtype"
+
+    assert mean.dtype in [
+        tf.float32,
+        tf.float64,
+    ], f"Invalid dtype: {mean.dtype=}"
+
     split = tf.random.split(seed, num=2)
     seed = split[0]
     next_seed = split[1]
@@ -155,8 +173,13 @@ def mvn_chol(
         rand: Random multivariate normals with mean `loc` and covariance `scale`.
     """
 
-    assert mean.dtype == cov_chol.dtype, "mean and chol must have the same dtype"
-    assert mean.dtype in [tf.float32, tf.float64], f"Invalid dtype: {mean.dtype=}"
+    assert (
+        mean.dtype == cov_chol.dtype
+    ), "mean and chol must have the same dtype"
+    assert mean.dtype in [
+        tf.float32,
+        tf.float64,
+    ], f"Invalid dtype: {mean.dtype=}"
 
     # Split seed
     split = tf.random.split(seed, num=2)
@@ -223,3 +246,32 @@ def zero_mean_mvn_chol(
     mean = tf.zeros(shape=tf.shape(cov_chol)[:-1], dtype=cov_chol.dtype)
 
     return mvn_chol(seed=seed, mean=mean, cov_chol=cov_chol)
+
+
+def zero_mean_mvn_on_grid_from_chol(
+    seed: tf.Tensor,
+    cov_chols: tf.Tensor,
+) -> Tuple[Seed, tf.Tensor]:
+
+    # Get data type
+    dtype = cov_chols[0].dtype
+
+    # Get grid shape
+    batch_shape = tf.shape(cov_chols[0])[0]
+    grid_shape = [tf.shape(cov_chol)[-1] for cov_chol in cov_chols]
+    shape = [batch_shape, *grid_shape]
+
+    # Draw random noise for each entry of the grid
+    seed, noise = randn(
+        shape=shape,
+        seed=seed,
+        mean=tf.zeros(shape=(), dtype=dtype),
+        stddev=tf.ones(shape=(), dtype=dtype),
+    )
+
+    for d, chol in enumerate(cov_chols):
+        noise = tf.experimental.numpy.swapaxes(noise, d+1, -1)
+        noise = tf.einsum("bij, b...j -> b...i", chol, noise)
+        noise = tf.experimental.numpy.swapaxes(noise, d+1, -1)
+
+    return seed, noise
