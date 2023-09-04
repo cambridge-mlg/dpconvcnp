@@ -187,7 +187,7 @@ class DPSetConvEncoder(tf.Module):
         )  # shape (batch_size, num_grid_points, 2)
 
         # Sample noise and add it to the data and density channels
-        seed, noise = self.sample_noise(
+        seed, noise, noise_std = self.sample_noise(
             seed=seed,
             x_dimension_wise_grids=x_dimension_wise_grids,
             sens_per_sigma=sens_per_sigma,
@@ -203,6 +203,9 @@ class DPSetConvEncoder(tf.Module):
                 [tf.shape(x_grid)[:-1], tf.shape(z_grid_flat)[-1:]], axis=0
             ),
         )  # shape (batch_size, n1, ..., ndim, 2)
+
+        # Concatenate noise standard deviation to grid
+        z_grid = tf.concat([z_grid, noise_std], axis=-1)
 
         return seed, x_grid, z_grid
 
@@ -226,8 +229,9 @@ class DPSetConvEncoder(tf.Module):
         seed: Seed,
         x_dimension_wise_grids: List[tf.Tensor],
         sens_per_sigma: tf.Tensor,
-    ) -> tf.Tensor:
-        """Sample noise for the density and data channels.
+    ) -> Tuple[Seed, tf.Tensor, tf.Tensor]:
+        """Sample noise for the density and data channels, returning the new
+        seed, the noise tensor and the noise standard deviation tensor.
 
         Arguments:
             x_grid: Tensor of shape (batch_size, num_grid_points, Dx)
@@ -242,7 +246,7 @@ class DPSetConvEncoder(tf.Module):
             sens_per_sigma,
             message="sens_per_sigma contains NaNs or inf.",
         )
-        
+
         # Get input data type
         in_dtype = x_dimension_wise_grids[0].dtype
 
@@ -250,7 +254,7 @@ class DPSetConvEncoder(tf.Module):
             compute_eq_weights(
                 x1=cast(x_dimension_wise_grids[i][:, :, None], dtype=f64),
                 x2=cast(x_dimension_wise_grids[i][:, :, None], dtype=f64),
-                lengthscales=cast(self.lengthscales[i:i+1], dtype=f64),
+                lengthscales=cast(self.lengthscales[i : i + 1], dtype=f64),
             )
             for i in range(len(x_dimension_wise_grids))
         ]
@@ -277,21 +281,35 @@ class DPSetConvEncoder(tf.Module):
         data_noise = cast(data_noise, dtype=in_dtype)
         density_noise = cast(density_noise, dtype=in_dtype)
 
-        # Multiply noise by standard deviations
-        data_noise = data_noise * expand_last_dims(
+        # Compute and expand data_sigma and density_sigma for broadcasting
+        data_sigma = expand_last_dims(
             self.data_sigma(sens_per_sigma=sens_per_sigma),
-            ndims=len(tf.shape(data_noise))-1,
-        )
+            ndims=len(tf.shape(data_noise)) - 1,
+        )  # shape (batch_size, 1, ..., 1)
 
-        density_noise = density_noise * expand_last_dims(
+        density_sigma = expand_last_dims(
             self.density_sigma(sens_per_sigma=sens_per_sigma),
-            ndims=len(tf.shape(density_noise))-1,
-        )
+            ndims=len(tf.shape(density_noise)) - 1,
+        )  # shape (batch_size, 1, ..., 1)
 
-        return seed, tf.stack(
-            [data_noise, density_noise],
+        # Multiply noise by standard deviations
+        noise = tf.stack(
+            [
+                data_noise * data_sigma,
+                density_noise * density_sigma,
+            ],
             axis=-1,
-        )  # shape (batch_size, num_grid_points, 2)
+        )  # shape (batch_size, n1, ..., nd, 2)
+
+        noise_std = tf.stack(
+            [
+                tf.ones_like(data_noise) * data_sigma,
+                tf.ones_like(density_noise) * density_sigma,
+            ],
+            axis=-1,
+        )  # shape (batch_size, n1, ..., nd, 2)
+
+        return seed, noise, noise_std
 
 
 class SetConvDecoder(tf.Module):
@@ -458,8 +476,7 @@ def make_grids(
     # Set up list of dimension-wise grids
     dimension_wise_grids = [
         x_mid[:, i : i + 1]
-        + tf.range(-N[i], N[i], dtype=xmin.dtype)[None, :]
-        / points_per_unit
+        + tf.range(-N[i], N[i], dtype=xmin.dtype)[None, :] / points_per_unit
         for i in range(dim)
     ]  # list of tensors with shapes (batch_size, 2*N[d]+1)
 
