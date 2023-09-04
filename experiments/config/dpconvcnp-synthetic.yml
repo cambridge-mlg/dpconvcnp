@@ -8,9 +8,9 @@ generators:
     max_log10_lengthscale: -0.602
     noise_std: 0.2
     min_num_ctx: 1
-    max_num_ctx: 128
-    min_num_trg: 128
-    max_num_trg: 128
+    max_num_ctx: 512
+    min_num_trg: 512
+    max_num_trg: 512
     context_range: [[-2.0, 2.0]]
     target_range: [[-3.0, 3.0]]
     samples_per_epoch: 16384
@@ -28,9 +28,9 @@ generators:
     max_log10_lengthscale: -0.602
     noise_std: 0.2
     min_num_ctx: 1
-    max_num_ctx: 128
-    min_num_trg: 128
-    max_num_trg: 128
+    max_num_ctx: 512
+    min_num_trg: 512
+    max_num_trg: 512
     context_range: [[-2.0, 2.0]]
     target_range: [[-3.0, 3.0]]
     samples_per_epoch: 4096
