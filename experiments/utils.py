@@ -174,6 +174,7 @@ def valid_epoch(
         batches.append(batch)
 
     result["mean_loss"] = tf.reduce_mean(result["loss"])
+    result["std_loss"] = tf.math.reduce_std(result["loss"])
     result["mean_kl_diag"] = tf.reduce_mean(result["kl_diag"])
 
     result["loss"] = tf.concat(result["loss"], axis=0)
@@ -252,8 +253,10 @@ class ModelCheckpointer:
             valid_result: validation result dictionary.
         """
 
-        if valid_result["loss"] < self.best_validation_loss:
-            self.best_validation_loss = valid_result["loss"]
+        loss_ci = valid_result["mean_loss"] + 1.96 * valid_result["std_loss"]
+
+        if loss_ci < self.best_validation_loss:
+            self.best_validation_loss = loss_ci
             model.save_weights(f"{self.path}/best")
 
         model.save_weights(f"{self.path}/last")
