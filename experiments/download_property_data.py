@@ -24,8 +24,6 @@ def get_latitude_longitude(postcode: str) -> tuple:
 
 
 def add_coordinates_to_dataframe(dataframe: pd.DataFrame) -> pd.DataFrame:
-    nomi = pgeocode.Nominatim("gb")
-
     # Keep rows with postcodes of type str only
     dataframe = dataframe[dataframe.iloc[:, 3].apply(type) == str]
 
@@ -52,6 +50,12 @@ parser.add_argument(
     help="Directory to download data to.",
 )
 
+parser.add_argument(
+    "--small-dataset",
+    action="store_true",
+    default=False,
+)
+
 args = parser.parse_args()
 
 if not os.path.exists(args.data_dir):
@@ -72,12 +76,18 @@ for year in YEARS:
     print(f"\nDownloading data for {year}...")
     wget.download(f"http://{URL}/pp-{year}.csv", out=f"{args.data_dir}/raw")
 
-print("\nFinished downloading data, preprocessing...")
+print("\nFinished downloading data, loading...")
+dataframes = [
+    pd.read_csv(f"{args.data_dir}/raw/pp-{year}.csv", header=None)
+    for year in tqdm(YEARS)
+]
+
+print("\nFinished loading, processing...")
 dataframes = [
     add_coordinates_to_dataframe(
-        pd.read_csv(f"{args.data_dir}/raw/pp-{year}.csv", header=None)
+        dataframe[::1000] if args.small_dataset else dataframe
     )
-    for year in tqdm(YEARS)
+    for dataframe in tqdm(dataframes)
 ]
 
 for dataframe, year in zip(dataframes, YEARS):
@@ -86,11 +96,16 @@ for dataframe, year in zip(dataframes, YEARS):
         index=False,
     )
 
+name = "small" if args.small_dataset else "all"
 dataframe = pd.concat(dataframes)
-dataframe.to_csv(f"{args.data_dir}/processed/all.csv", index=False)
+dataframe.to_csv(f"{args.data_dir}/processed/{name}.csv", index=False)
 
 ax = plt.axes(projection=ccrs.Mercator())
-ax.scatter(dataframe.iloc[:, -2], dataframe.iloc[:, -1], transform=ccrs.PlateCarree())
+ax.scatter(
+    dataframe.iloc[:, -2],
+    dataframe.iloc[:, -1],
+    transform=ccrs.PlateCarree(),
+)
 ax.add_feature(cf.BORDERS)
 ax.add_feature(cf.STATES)
 plt.savefig("tmp.pdf")

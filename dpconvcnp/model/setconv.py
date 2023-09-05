@@ -186,16 +186,6 @@ class DPSetConvEncoder(tf.Module):
             y_ctx,
         )  # shape (batch_size, num_grid_points, 2)
 
-        # Sample noise and add it to the data and density channels
-        seed, noise, noise_std = self.sample_noise(
-            seed=seed,
-            x_dimension_wise_grids=x_dimension_wise_grids,
-            sens_per_sigma=sens_per_sigma,
-        )
-        noise_flat = tf.reshape(noise, shape=(tf.shape(noise)[0], -1, 2))
-
-        z_grid_flat = z_grid_flat + noise_flat
-
         # Reshape grid
         z_grid = tf.reshape(
             z_grid_flat,
@@ -203,6 +193,16 @@ class DPSetConvEncoder(tf.Module):
                 [tf.shape(x_grid)[:-1], tf.shape(z_grid_flat)[-1:]], axis=0
             ),
         )  # shape (batch_size, n1, ..., ndim, 2)
+
+        # Sample noise and add it to the data and density channels
+        seed, noise, noise_std = self.sample_noise(
+            seed=seed,
+            x_dimension_wise_grids=x_dimension_wise_grids,
+            sens_per_sigma=sens_per_sigma,
+        )
+
+        # Add noise to data and density channels
+        z_grid = z_grid + noise
 
         # Concatenate noise standard deviation to grid
         z_grid = tf.concat([z_grid, noise_std], axis=-1)
@@ -249,7 +249,7 @@ class DPSetConvEncoder(tf.Module):
 
         # Get input data type
         in_dtype = x_dimension_wise_grids[0].dtype
-
+        
         kxx_dimension_wise = [
             compute_eq_weights(
                 x1=cast(x_dimension_wise_grids[i][:, :, None], dtype=f64),
@@ -261,7 +261,7 @@ class DPSetConvEncoder(tf.Module):
 
         kxx_chol_dimension_wise = [
             tf.linalg.cholesky(
-                kxx + tf.eye(tf.shape(kxx)[-1], dtype=kxx.dtype) * 1e-6
+                kxx + 1e-6 * tf.eye(tf.shape(kxx)[-1], dtype=kxx.dtype)
             )
             for kxx in kxx_dimension_wise
         ]
@@ -270,12 +270,12 @@ class DPSetConvEncoder(tf.Module):
         seed, data_noise = zero_mean_mvn_on_grid_from_chol(
             seed=seed,
             cov_chols=kxx_chol_dimension_wise,
-        )  # shape (batch_size, num_grid_points,)
+        )  # shape (batch_size, n1, ..., nd)
 
         seed, density_noise = zero_mean_mvn_on_grid_from_chol(
             seed=seed,
             cov_chols=kxx_chol_dimension_wise,
-        )  # shape (batch_size, num_grid_points,)
+        )  # shape (batch_size, n1, ..., nd)
 
         # Convert back to input data types
         data_noise = cast(data_noise, dtype=in_dtype)
