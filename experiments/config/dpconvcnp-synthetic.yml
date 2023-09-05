@@ -83,7 +83,7 @@ setconv:
     
 optimizer:
   _target_: tensorflow.keras.optimizers.Adam
-  learning_rate: 5e-4
+  learning_rate: 2e-4
 
 params:
   epochs: 100
