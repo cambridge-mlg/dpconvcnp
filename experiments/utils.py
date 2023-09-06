@@ -330,10 +330,6 @@ def initialize_experiment() -> (
     config = OmegaConf.merge(config, config_changes)
     experiment = instantiate(config)
     path = make_experiment_path(experiment)
-
-    # If experiment path already exists, raise an exception
-    assert not os.path.exists(path), f"Path {path} already exists."
-
     writer = Writer(f"{path}/logs")
 
     # Write config to file together with commit hash
