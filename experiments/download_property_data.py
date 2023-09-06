@@ -85,18 +85,20 @@ dataframes = [
 print("\nFinished loading, processing...")
 dataframes = [
     add_coordinates_to_dataframe(
-        dataframe[::1000] if args.small_dataset else dataframe
+        dataframe[::100] if args.small_dataset else dataframe
     )
     for dataframe in tqdm(dataframes)
 ]
 
+print("\nFinished processing, saving individual dataframes...")
+name = "small" if args.small_dataset else "all"
 for dataframe, year in zip(dataframes, YEARS):
     dataframe.to_csv(
-        f"{args.data_dir}/processed/{year}.csv",
+        f"{args.data_dir}/processed/{name}-{year}.csv",
         index=False,
     )
 
-name = "small" if args.small_dataset else "all"
+print("\nSaving aggregate dataframe...")
 dataframe = pd.concat(dataframes)
 dataframe.to_csv(f"{args.data_dir}/processed/{name}.csv", index=False)
 
