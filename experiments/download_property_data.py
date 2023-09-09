@@ -50,7 +50,7 @@ def add_coordinates_to_dataframe(dataframe: pd.DataFrame) -> pd.DataFrame:
     postcodes = dataframe.iloc[:, 3].values
 
     # Split postcodes into 200 chunks to avoid overloading the API
-    postcode_splits = np.array_split(postcodes, len(postcodes) // 100 + 1)  # 20000)
+    postcode_splits = np.array_split(postcodes, len(postcodes) // 100 + 1)
 
     latitudes = []
     longitudes = []
@@ -119,8 +119,7 @@ dataframes = [
     for dataframe in tqdm(dataframes, desc="Processing dataframes")
 ]
 
-# Drop all rows with NaNs
-dataframes = [dataframe.dropna() for dataframe in dataframes]
+dataframes = [dataframe.dropna(subset=[16, 17]) for dataframe in dataframes]
 
 print("\nFinished processing, saving individual dataframes...")
 name = "small" if args.small_dataset else "all"
