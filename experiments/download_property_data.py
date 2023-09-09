@@ -119,6 +119,9 @@ dataframes = [
     for dataframe in tqdm(dataframes, desc="Processing dataframes")
 ]
 
+# Drop all rows with NaNs
+dataframes = [dataframe.dropna() for dataframe in dataframes]
+
 print("\nFinished processing, saving individual dataframes...")
 name = "small" if args.small_dataset else "all"
 for dataframe, year in zip(dataframes, YEARS):
