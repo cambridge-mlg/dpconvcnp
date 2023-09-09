@@ -1,4 +1,4 @@
-from typing import Tuple, Dict, List, Optional
+from typing import Tuple, Dict, List, Optional, Any
 import argparse
 import os
 import yaml
@@ -348,41 +348,46 @@ def initialize_experiment() -> (
     return experiment, path, log_path, writer, model_checkpointer
 
 
-def initialize_evaluation():
+def initialize_evaluation(
+    experiment_path: str = None,
+    evaluation_config: str = None,
+    **evaluation_config_changes,
+):
     # Make argument parser with just the config argument
     parser = argparse.ArgumentParser()
     parser.add_argument("--experiment_path", type=str)
     parser.add_argument("--evaluation_config", type=str)
-    parser.add_argument("--debug", action="store_true")
     args, config_changes = parser.parse_known_args()
 
-    ## Create a repo object and check if local repo is clean
-    #repo = git.Repo(search_parent_directories=True)
+    experiment_path = (
+        args.experiment_path if experiment_path is None else experiment_path
+    )
 
-    ## Check that the repo is clean
-    #assert (
-    #    args.debug or not repo.is_dirty()
-    #), "Repo is dirty, please commit changes."
-    #assert args.debug or not has_commits_ahead(
-    #    repo
-    #), "Repo has commits ahead, please push changes."
+    evaluation_config = (
+        args.evaluation_config
+        if evaluation_config is None
+        else evaluation_config
+    )
 
     # Initialize experiment, make path and writer
-    OmegaConf.register_new_resolver("eval", eval)
-    experiment_config = OmegaConf.load(f"{args.experiment_path}/config.yml")
+    try:
+        OmegaConf.register_new_resolver("eval", eval)
+
+    except ValueError:
+        pass
+
+    experiment_config = OmegaConf.load(f"{experiment_path}/config.yml")
     evaluation_config = OmegaConf.merge(
-        OmegaConf.load(args.evaluation_config),
+        OmegaConf.load(evaluation_config),
         OmegaConf.from_cli(config_changes),
+        evaluation_config_changes,
     )
     experiment = instantiate(experiment_config)
     evaluation = instantiate(evaluation_config)
 
-    ## Check out commit hash -- only the model is loaded using this hash
-    #repo.git.checkout(f"{experiment_config.commit}", "dpconvcnp")
-
     # Create model checkpointer and load model
     checkpointer = ModelCheckpointer(
-        path=f"{args.experiment_path}/checkpoints",
+        path=f"{experiment_path}/checkpoints",
     )
 
     # Set model
@@ -391,11 +396,10 @@ def initialize_evaluation():
     # Load model weights
     checkpointer.load_best_checkpoint(model=model)
 
-    experiment_path = args.experiment_path
     eval_name = evaluation.params.eval_name
-
-    assert evaluation.params.eval_name is not None
-    if not os.path.exists(f"{experiment_path}/eval/{eval_name}"):
+    if eval_name is not None and not os.path.exists(
+        f"{experiment_path}/eval/{eval_name}"
+    ):
         os.makedirs(f"{experiment_path}/eval/{eval_name}")
 
     return (
@@ -467,7 +471,7 @@ def make_experiment_path(experiment: DictConfig) -> str:
         os.makedirs(path)
 
     else:
-        #raise ValueError(f"Path {path} already exists.")
+        # raise ValueError(f"Path {path} already exists.")
         pass
 
     return path
