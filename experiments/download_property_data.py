@@ -1,6 +1,6 @@
 import argparse
 import os
-from multiprocessing import Pool
+from datetime import datetime
 
 import wget
 import pandas as pd
@@ -18,10 +18,9 @@ YEARS = np.arange(1995, 2023)
 
 
 def get_latitudes_longitudes(postcodes: str) -> tuple:
-
     try:
         response = requests.post(
-           "https://api.postcodes.io/postcodes",
+            "https://api.postcodes.io/postcodes",
             json={"postcodes": list(postcodes)},
         ).json()
 
@@ -51,7 +50,7 @@ def add_coordinates_to_dataframe(dataframe: pd.DataFrame) -> pd.DataFrame:
     postcodes = dataframe.iloc[:, 3].values
 
     # Split postcodes into 200 chunks to avoid overloading the API
-    postcode_splits = np.array_split(postcodes, 20000)
+    postcode_splits = np.array_split(postcodes, len(postcodes) // 100 + 1)  # 20000)
 
     latitudes = []
     longitudes = []
@@ -130,7 +129,32 @@ for dataframe, year in zip(dataframes, YEARS):
 
 print("\nSaving aggregate dataframe...")
 dataframe = pd.concat(dataframes)
+dataframe.to_csv(f"{args.data_dir}/processed/inter-{name}.csv", index=False)
+
+
+# Read dates and add integer representing number of days since earliest day
+print("\nAdding days since first day...")
+d0 = datetime.strptime(min(dataframe.iloc[:, 2]), "%Y-%m-%d %H:%M")
+days = dataframe.iloc[:, 2].map(
+    lambda d: (datetime.strptime(d, "%Y-%m-%d %H:%M") - d0).days
+)
+
+# Creating postprocessed dataframe
+dataframe = pd.DataFrame(
+    data={
+        "lat": dataframe.iloc[:, -2].astype(np.float32),
+        "lon": dataframe.iloc[:, -1].astype(np.float32),
+        "price": np.log10(dataframe.iloc[:, 1]).astype(np.float32),
+        "type": dataframe.iloc[:, 4].astype(str),
+        "new": dataframe.iloc[:, 5].astype(str),
+        "lease": dataframe.iloc[:, 6].astype(str),
+        "day": days,
+        "date": dataframe.iloc[:, 2].astype(str),
+        "postcode": dataframe.iloc[:, 3].astype(str),
+    },
+)
 dataframe.to_csv(f"{args.data_dir}/processed/{name}.csv", index=False)
+
 
 ax = plt.axes(projection=ccrs.Mercator())
 ax.scatter(
