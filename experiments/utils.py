@@ -18,6 +18,7 @@ import pandas as pd
 
 from dpconvcnp.random import Seed
 from dpconvcnp.data.data import DataGenerator, Batch
+from dpconvcnp.utils import cast, f32
 
 tfd = tfp.distributions
 
@@ -58,7 +59,7 @@ def train_step(
             epsilon=epsilon,
             delta=delta,
         )
-        loss = tf.reduce_mean(loss) / y_trg.shape[1]
+        loss = tf.reduce_mean(loss) / cast(tf.shape(y_trg)[1], f32)
 
     gradients = tape.gradient(loss, model.trainable_variables)
     optimizer.apply_gradients(zip(gradients, model.trainable_variables))
@@ -94,12 +95,12 @@ def train_epoch(
 
         if not model.dpsetconv_encoder.amortize_y_bound:
             writer.add_scalar(
-                "y_bound", model.dpsetconv_encoder.y_bound(None)[0], step
+                "y_bound", model.dpsetconv_encoder.y_bound(None)[0, 0], step
             )
 
         if not model.dpsetconv_encoder.amortize_w_noise:
             writer.add_scalar(
-                "w_noise", model.dpsetconv_encoder.w_noise(None)[0], step
+                "w_noise", model.dpsetconv_encoder.w_noise(None)[0, 0], step
             )
 
         epoch.set_postfix(loss=f"{loss:.4f}")
@@ -141,35 +142,36 @@ def valid_epoch(
             delta=batch.delta,
         )
 
-        gt_mean, gt_std, gt_log_lik = batch.gt_pred(
-            x_ctx=batch.x_ctx,
-            y_ctx=batch.y_ctx,
-            x_trg=batch.x_trg,
-            y_trg=batch.y_trg,
-        )
-
         loss = loss / batch.y_trg.shape[1]
-        gt_loss = -gt_log_lik / batch.y_trg.shape[1]
 
         result["loss"].append(loss)
         result["pred_mean"].append(mean[:, :, 0])
         result["pred_std"].append(std[:, :, 0])
 
-        result["gt_mean"].append(gt_mean[:, :, 0])
-        result["gt_std"].append(gt_std[:, :, 0])
-        result["gt_loss"].append(gt_loss)
-
-        result["kl_diag"].append(
-            tf.reduce_mean(
-                gauss_gauss_kl_diag(
-                    mean_1=gt_mean,
-                    std_1=gt_std,
-                    mean_2=mean,
-                    std_2=std,
-                ),
-                axis=[1, 2],
+        if batch.gt_pred is not None:
+            gt_mean, gt_std, gt_log_lik = batch.gt_pred(
+                x_ctx=batch.x_ctx,
+                y_ctx=batch.y_ctx,
+                x_trg=batch.x_trg,
+                y_trg=batch.y_trg,
             )
-        )
+            gt_loss = -gt_log_lik / batch.y_trg.shape[1]
+
+            result["gt_mean"].append(gt_mean[:, :, 0])
+            result["gt_std"].append(gt_std[:, :, 0])
+            result["gt_loss"].append(gt_loss)
+
+            result["kl_diag"].append(
+                tf.reduce_mean(
+                    gauss_gauss_kl_diag(
+                        mean_1=gt_mean,
+                        std_1=gt_std,
+                        mean_2=mean,
+                        std_2=std,
+                    ),
+                    axis=[1, 2],
+                )
+            )
 
         batches.append(batch)
 
@@ -178,8 +180,12 @@ def valid_epoch(
     result["mean_kl_diag"] = tf.reduce_mean(result["kl_diag"])
 
     result["loss"] = tf.concat(result["loss"], axis=0)
-    result["kl_diag"] = tf.concat(result["kl_diag"], axis=0)
-    result["gt_loss"] = tf.concat(result["gt_loss"], axis=0)
+
+    if len(result["gt_loss"]) > 0:
+        result["kl_diag"] = tf.concat(result["kl_diag"], axis=0)
+
+    if len(result["gt_loss"]) > 0:
+        result["gt_loss"] = tf.concat(result["gt_loss"], axis=0)
 
     result["epsilon"] = tf.concat([b.epsilon for b in batches], axis=0)
     result["delta"] = tf.concat([b.delta for b in batches], axis=0)

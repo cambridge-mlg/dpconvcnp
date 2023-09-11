@@ -65,7 +65,7 @@ class DataGenerator(ABC):
             max_log10_delta: Maximum log10 DP delta.
             name: Name of data generator.
         """
-        
+
         # Set random seed for generator
         self.seed = seed
 
@@ -136,7 +136,8 @@ class DataGenerator(ABC):
         return seed, batch
 
     def sample_epsilon_delta(
-        self, seed: Seed
+        self,
+        seed: Seed,
     ) -> Tuple[Seed, tf.Tensor, tf.Tensor]:
         """Sample epsilon and delta for each task in the batch.
 

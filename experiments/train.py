@@ -1,7 +1,7 @@
 import sys
 
 from utils import initialize_experiment, train_epoch, valid_epoch, tee_to_file
-from plot import plot
+from plot import plot, plot_property
 from dpconvcnp.utils import to_tensor, i32
 
 
@@ -51,6 +51,14 @@ def main():
             epoch=epoch,
             batches=batches,
         )
+
+        #plot_property(
+        #    path=path,
+        #    model=dpconvcnp,
+        #    seed=plot_seed,
+        #    epoch=epoch,
+        #    batches=batches,
+        #)
 
 
 
