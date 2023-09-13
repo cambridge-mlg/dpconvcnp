@@ -69,15 +69,6 @@ def plot(
                 epsilon=batches[i].epsilon[:1],
                 delta=batches[i].delta[:1],
             )
-            model_nll = tf.reduce_sum(loss) / batches[i].y_trg.shape[1]
-
-            _, _, gt_log_prob = batches[i].gt_pred(
-                x_ctx=batches[i].x_ctx[:1],
-                y_ctx=batches[i].y_ctx[:1],
-                x_trg=batches[i].x_trg[:1],
-                y_trg=batches[i].y_trg[:1],
-            )
-            gt_nll = tf.reduce_mean(-gt_log_prob) / batches[i].y_trg.shape[1]
 
             # Make figure for plotting
             plt.figure(figsize=figsize)
@@ -161,4 +152,107 @@ def plot(
             plt.close()
 
     else:
-        raise NotImplementedError
+        for i in range(num_fig):
+            _, mean_trg, _ = model(
+                seed=seed,
+                x_ctx=batches[i].x_ctx[:1],
+                y_ctx=batches[i].y_ctx[:1],
+                x_trg=batches[i].x_trg[:1],
+                epsilon=batches[i].epsilon[:1],
+                delta=batches[i].delta[:1],
+            )
+
+            mean = tf.reduce_mean(batches[i].y_ctx[:1], axis=1, keepdims=True)
+            print(
+                f"RMSE: {tf.reduce_mean((mean_trg - batches[i].y_trg[:1])**2)**0.5:.3f} \n"
+                f"Signal RMSE: {tf.reduce_mean((batches[i].y_trg[:1] - mean)**2)**0.5:.3f} \n"
+            )
+
+
+def plot_property(
+    path: str,
+    model: tf.Module,
+    seed: Seed,
+    batches: List[Batch],
+    epoch: int = 0,
+    num_fig: int = 5,
+    figsize: Tuple[float, float] = (6.0, 6.0),
+    x_range: Tuple[float, float] = (-1.0, 1.0),
+    points_per_dim: int = 128,
+):
+
+    # If path for figures does not exist, create it
+    os.makedirs(f"{path}/fig", exist_ok=True)
+
+    x_plot = np.linspace(x_range[0]-1e-1, x_range[1]+1e-1, points_per_dim)
+    x_plot = np.stack(np.meshgrid(x_plot, x_plot), axis=-1)[None, ...]
+
+    for i in range(num_fig):
+
+        _, mean, std = model(
+            seed=seed,
+            x_ctx=batches[i].x_ctx[:1],
+            y_ctx=batches[i].y_ctx[:1],
+            x_trg=to_tensor(np.reshape(x_plot, (1, -1, 2)), f32),
+            epsilon=batches[i].epsilon[:1],
+            delta=batches[i].delta[:1],
+        )
+
+        mean = tf.reshape(mean, (1, points_per_dim, points_per_dim, 1))
+        mean = mean[0, ..., 0]
+        std = tf.reshape(std, (1, points_per_dim, points_per_dim, 1))
+        std = std[0, ..., 0]
+
+        _, mean_trg, std_trg = model(
+            seed=seed,
+            x_ctx=batches[i].x_ctx[:1],
+            y_ctx=batches[i].y_ctx[:1],
+            x_trg=batches[i].x_trg[:1],
+            epsilon=batches[i].epsilon[:1],
+            delta=batches[i].delta[:1],
+        )
+
+        print(
+            f"RMSE        : {tf.reduce_mean((mean_trg - batches[i].y_trg[:1])**2)**0.5:.3f} \n"
+            f"Signal RMSE : {tf.reduce_mean((batches[i].y_trg[:1] - tf.reduce_mean(batches[i].y_ctx[:1], axis=1, keepdims=True))**2)**0.5:.3f} \n"
+            f"Pred mean   : {tf.reduce_mean(mean[:1]):.3f} \n"
+        )
+
+        plt.figure(figsize=figsize)
+        plt.scatter(
+            batches[i].x_ctx[0, :, 0],
+            batches[i].x_ctx[0, :, 1],
+            c=batches[i].y_ctx[0, :, 0],
+            s=10,
+            cmap="coolwarm",
+            zorder=2,
+            vmin=-2.0,
+            vmax=2.0,
+        )
+        plt.scatter(
+            batches[i].x_ctx[0, :, 0],
+            batches[i].x_ctx[0, :, 1],
+            c=batches[i].y_ctx[0, :, 0],
+            s=20,
+            cmap="coolwarm",
+            zorder=3,
+            vmin=-2.0,
+            vmax=2.0,
+        )
+
+        plt.contourf(
+            x_plot[0, ..., 0],
+            x_plot[0, ..., 1],
+            mean,
+            cmap="coolwarm",
+            zorder=1,
+            alpha=0.5,
+            vmin=-2.0,
+            vmax=2.0,
+        )
+
+        plt.xlim([-1.1, 1.1])
+        plt.ylim([-1.1, 1.1])
+
+        plt.savefig(f"{path}/fig/epoch-{epoch:04d}-{i:03d}.png")
+        plt.close()
