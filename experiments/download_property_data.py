@@ -24,14 +24,10 @@ def get_latitudes_longitudes(postcodes: str) -> tuple:
             json={"postcodes": list(postcodes)},
         ).json()
 
-    except requests.exceptions.JSONDecodeError:
-        print("Error with decoding JSON, returning Nones...")
+    except Exception:
+        print("Error with post request, returning Nones...")
         return [None] * len(postcodes), [None] * len(postcodes)
 
-    except requests.exceptions.ChunkedEncodingError:
-        print("Error with request, returning Nones...")
-        return [None] * len(postcodes), [None] * len(postcodes)
-    
     if response["status"] != 200:
         print(f"Response status {response['status']}, returning Nones...")
         return [None] * len(postcodes), [None] * len(postcodes)

@@ -24,11 +24,11 @@ def plot(
     seed: Seed,
     batches: List[Batch],
     epoch: int = 0,
-    num_fig: int = 5,
+    num_fig: int = 3,
     figsize: Tuple[float, float] = (8.0, 6.0),
-    x_range: Tuple[float, float] = (-5.0, 5.0),
+    x_range: Tuple[float, float] = (-1.1, 1.1),
     y_lim: Tuple[float, float] = (-3.0, 3.0),
-    points_per_dim: int = 64,
+    points_per_dim: int = 128,
 ):
     # Get dimension of input data
     dim = batches[0].x_ctx.shape[-1]
@@ -152,12 +152,12 @@ def plot(
             plt.close()
 
     else:
-
-        x_plot = np.linspace(x_range[0]-1e-1, x_range[1]+1e-1, points_per_dim)
+        x_plot = np.linspace(
+            x_range[0] - 1e-1, x_range[1] + 1e-1, points_per_dim
+        )
         x_plot = np.stack(np.meshgrid(x_plot, x_plot), axis=-1)[None, ...]
 
         for i in range(num_fig):
-
             _, mean, std = model(
                 seed=seed,
                 x_ctx=batches[i].x_ctx[:1],
@@ -172,21 +172,8 @@ def plot(
             std = tf.reshape(std, (1, points_per_dim, points_per_dim, 1))
             std = std[0, ..., 0]
 
-
-            plt.figure(figsize=(2*figsize[0], figsize[1]))
+            plt.figure(figsize=(2 * figsize[0], figsize[1]))
             plt.subplot(1, 2, 1)
-
-            plt.scatter(
-                batches[i].x_ctx[0, :, 0],
-                batches[i].x_ctx[0, :, 1],
-                c=batches[i].y_ctx[0, :, 0],
-                marker="+",
-                s=20,
-                cmap="coolwarm",
-                zorder=2,
-                vmin=-3.0,
-                vmax=3.0,
-            )
 
             plt.scatter(
                 batches[i].x_ctx[0, :, 0],
@@ -195,9 +182,11 @@ def plot(
                 marker="o",
                 s=20,
                 cmap="coolwarm",
-                zorder=3,
-                vmin=-3.0,
-                vmax=3.0,
+                zorder=2,
+                vmin=-1.5,
+                vmax=1.5,
+                edgecolors="k",
+                linewidths=0.5,
             )
 
             plt.contourf(
@@ -206,13 +195,12 @@ def plot(
                 mean,
                 cmap="coolwarm",
                 zorder=1,
-                vmin=-3.0,
-                vmax=3.0,
+                vmin=-1.5,
+                vmax=1.5,
             )
 
-            plt.xlim([-4.0, 4.0])
-            plt.ylim([-4.0, 4.0])
-            
+            plt.xlim(x_range)
+            plt.ylim(x_range)
 
             _, mean, std = model(
                 seed=seed,
@@ -224,24 +212,36 @@ def plot(
             )
 
             gt_pred = batches[i].gt_pred
-            gt_mean, gt_std, _ = gt_pred(
-                x_ctx=batches[i].x_ctx[:1],
-                y_ctx=batches[i].y_ctx[:1],
-                x_trg=batches[i].x_trg[:1],
-            )
 
-            idx = np.argsort(gt_std[0, :, 0].numpy())
+            if gt_pred is not None:
+                gt_mean, gt_std, _ = gt_pred(
+                    x_ctx=batches[i].x_ctx[:1],
+                    y_ctx=batches[i].y_ctx[:1],
+                    x_trg=batches[i].x_trg[:1],
+                )
+
+            idx = (
+                np.argsort(gt_std[0, :, 0].numpy())
+                if gt_pred is not None
+                else np.argsort(std[0, :, 0].numpy())
+            )
 
             y_trg_ordered = batches[i].y_trg[0, :, 0].numpy()[idx]
             mean_ordered = mean[0, :, 0].numpy()[idx]
             std_ordered = std[0, :, 0].numpy()[idx]
-            gt_mean_ordered = gt_mean[0, :, 0].numpy()[idx]
-            gt_std_ordered = gt_std[0, :, 0].numpy()[idx]
+
+            if gt_pred is not None:
+                gt_mean_ordered = gt_mean[0, :, 0].numpy()[idx]
+                gt_std_ordered = gt_std[0, :, 0].numpy()[idx]
+
+            centering = (
+                gt_mean_ordered if gt_pred is not None else 0.
+            )
 
             plt.subplot(1, 2, 2)
             plt.scatter(
                 np.arange(len(y_trg_ordered)),
-                y_trg_ordered - gt_mean_ordered,
+                y_trg_ordered - centering,
                 c="tab:red",
                 marker="o",
                 s=10,
@@ -250,7 +250,7 @@ def plot(
 
             plt.errorbar(
                 np.arange(len(y_trg_ordered)),
-                mean_ordered - gt_mean_ordered,
+                mean_ordered - centering,
                 yerr=1.96 * std_ordered,
                 c="black",
                 fmt="",
@@ -259,18 +259,21 @@ def plot(
                 zorder=1,
             )
 
-            plt.errorbar(
-                np.arange(len(y_trg_ordered)),
-                gt_mean_ordered - gt_mean_ordered,
-                yerr=1.96 * gt_std_ordered,
-                c="tab:purple",
-                fmt="",
-                linestyle="",
-                capsize=2,
-                zorder=2,
-            )
-            plt.xticks([])
-            plt.yticks([])
+            if gt_pred is not None:
+                plt.errorbar(
+                    np.arange(len(y_trg_ordered)),
+                    gt_mean_ordered - centering,
+                    yerr=1.96 * gt_std_ordered,
+                    c="tab:purple",
+                    fmt="",
+                    linestyle="",
+                    capsize=2,
+                    zorder=2,
+                )
+                plt.xticks([])
+                plt.yticks([])
+
+            plt.ylim([-1.5, 1.5])
 
             plt.savefig(f"{path}/fig/epoch-{epoch:04d}-{i:03d}.png")
             plt.close()

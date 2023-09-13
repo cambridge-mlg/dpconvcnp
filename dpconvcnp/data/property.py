@@ -15,7 +15,8 @@ class PropertyPriceDataGenerator(DataGenerator):
         self,
         *,
         path_to_csv: str,
-        task_size: int,
+        num_ctx: int,
+        num_trg: int,
         mode: Literal["train", "valid", "test"],
         valid_fraction: float = 0.1,
         test_fraction: float = 0.1,
@@ -36,7 +37,8 @@ class PropertyPriceDataGenerator(DataGenerator):
         self.max_coords = max_coords
         self.valid_fraction = valid_fraction
         self.test_fraction = test_fraction
-        self.task_size = task_size
+        self.num_ctx = num_ctx
+        self.num_trg = num_trg
 
         # Read data csv
         dataframe = pd.read_csv(path_to_csv)
@@ -52,15 +54,16 @@ class PropertyPriceDataGenerator(DataGenerator):
 
         # Compute samples per epoch and remove any excess rows
         B = kwargs["batch_size"]
+        self.task_size = num_ctx + num_trg
         dataframe = dataframe[
-            : (dataframe.shape[0] // (B * task_size)) * B * task_size
+            : (dataframe.shape[0] // (B * self.task_size)) * B * self.task_size
         ]
         dataframe = self.zero_mean_price(dataframe=dataframe)
         self.dataframe = self.normalise_lat_lon(dataframe=dataframe)
 
         self.tasks = np.split(
             self.dataframe,
-            len(self.dataframe) // task_size,
+            len(self.dataframe) // self.task_size,
         )
 
         self.task_index = self.make_task_index()
@@ -89,12 +92,12 @@ class PropertyPriceDataGenerator(DataGenerator):
             dataframe = dataframe[dataframe["new"].isin(self.age_types)]
 
         if self.min_coords is not None:
-            dataframe = dataframe[dataframe["lat"] >= self.min_coords[0]]
-            dataframe = dataframe[dataframe["lon"] >= self.min_coords[1]]
+            dataframe = dataframe[dataframe["lon"] >= self.min_coords[0]]
+            dataframe = dataframe[dataframe["lat"] >= self.min_coords[1]]
 
         if self.max_coords is not None:
-            dataframe = dataframe[dataframe["lat"] <= self.max_coords[0]]
-            dataframe = dataframe[dataframe["lon"] <= self.max_coords[1]]
+            dataframe = dataframe[dataframe["lon"] <= self.max_coords[0]]
+            dataframe = dataframe[dataframe["lat"] <= self.max_coords[1]]
 
         return dataframe
 
@@ -119,18 +122,18 @@ class PropertyPriceDataGenerator(DataGenerator):
             raise ValueError(f"Unknown mode {self.mode}")
 
     def normalise_lat_lon(self, dataframe: pd.DataFrame) -> pd.DataFrame:
-        max_lat = dataframe["lat"].max()
-        min_lat = dataframe["lat"].min()
-        mid_lat = (max_lat + min_lat) / 2.0
-        scale_lat = (max_lat - min_lat) / 2.0
-
         max_lon = dataframe["lon"].max()
         min_lon = dataframe["lon"].min()
         mid_lon = (max_lon + min_lon) / 2.0
         scale_lon = (max_lon - min_lon) / 2.0
 
-        dataframe["lat"] = (dataframe["lat"] - mid_lat) / scale_lat
+        max_lat = dataframe["lat"].max()
+        min_lat = dataframe["lat"].min()
+        mid_lat = (max_lat + min_lat) / 2.0
+        scale_lat = (max_lat - min_lat) / 2.0
+
         dataframe["lon"] = (dataframe["lon"] - mid_lon) / scale_lon
+        dataframe["lat"] = (dataframe["lat"] - mid_lat) / scale_lat
 
         return dataframe
 
@@ -146,29 +149,35 @@ class PropertyPriceDataGenerator(DataGenerator):
             maxval=len(self.tasks) - 1,
         )
 
-        # Get tasks for batch, using the .sample function to shuffle
-        tasks = [self.tasks[i].sample(frac=1.0) for i in idx.numpy()]
+        # Split into context and target
+        seed, shuffle_idx = randint(
+            seed=seed,
+            shape=(self.batch_size, self.task_size),
+            minval=0,
+            maxval=int(1e6) * (self.task_size - 1),
+        )
 
-        lat = np.stack([task["lat"].values for task in tasks], axis=0)
+        shuffle_idx = shuffle_idx.numpy()
+        shuffle_idx = np.argsort(shuffle_idx, axis=1)
+
+        # Get tasks for batch, using the .sample function to shuffle
+        tasks = [
+            self.tasks[i].iloc[shuffle_idx[n], :]
+            for n, i in enumerate(idx.numpy())
+        ]
+
         lon = np.stack([task["lon"].values for task in tasks], axis=0)
+        lat = np.stack([task["lat"].values for task in tasks], axis=0)
         price = np.stack([task["price"].values for task in tasks], axis=0)
 
-        x = to_tensor(np.stack([lat, lon], axis=-1), f32)
+        x = to_tensor(np.stack([lon, lat], axis=-1), f32)
         y = to_tensor(price, f32)[:, :, None]
-
-        # Split into context and target
-        seed, num_ctx = randint(
-            seed=seed,
-            shape=(),
-            minval=1,
-            maxval=self.task_size - 1,
-        )
 
         return seed, Batch(
             x=x,
             y=y,
-            x_ctx=x[:, :num_ctx, :],
-            y_ctx=y[:, :num_ctx, :],
-            x_trg=x[:, num_ctx:, :],
-            y_trg=y[:, num_ctx:, :],
+            x_ctx=x[:, : self.num_ctx, :],
+            y_ctx=y[:, : self.num_ctx, :],
+            x_trg=x[:, self.num_ctx :, :],
+            y_trg=y[:, self.num_ctx :, :],
         )

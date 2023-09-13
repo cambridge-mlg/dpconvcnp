@@ -141,21 +141,14 @@ def valid_epoch(
             delta=batch.delta,
         )
 
-        gt_mean, gt_std, gt_log_lik = batch.gt_pred(
-            x_ctx=batch.x_ctx,
-            y_ctx=batch.y_ctx,
-            x_trg=batch.x_trg,
-            y_trg=batch.y_trg,
-        )
-
         loss = loss / batch.y_trg.shape[1]
-        gt_loss = -gt_log_lik / batch.y_trg.shape[1]
 
         result["loss"].append(loss)
         result["pred_mean"].append(mean[:, :, 0])
         result["pred_std"].append(std[:, :, 0])
 
         if batch.gt_pred is not None:
+
             gt_mean, gt_std, gt_log_lik = batch.gt_pred(
                 x_ctx=batch.x_ctx,
                 y_ctx=batch.y_ctx,

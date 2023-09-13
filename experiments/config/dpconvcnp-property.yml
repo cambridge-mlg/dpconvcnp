@@ -8,15 +8,16 @@ generators:
     min_log10_delta: -3
     max_log10_delta: -3
     path_to_csv: /scratches/cblgpu07/em626/dpconvcnp/_data/processed/small.csv
-    task_size: 512
+    num_ctx: 256
+    num_trg: 256
     mode: train
     valid_fraction: 0.1
     test_fraction: 0.1
     property_types: ["T"]
     lease_types: ["F", "L"]
     age_types: ["Y", "N"]
-    min_coords: null # Set to [51.236282, -0.582550] for London only
-    max_coords: null # Set to [51.740789, 0.3210750] for London only
+    min_coords: [-0.582550, 51.236282] # null # Set to [-0.582550, 51.236282] for London only
+    max_coords: [0.3210750, 51.740789] # null # Set to [0.3210750, 51.740789] for London only
   valid:
     _target_: dpconvcnp.data.property.PropertyPriceDataGenerator
     seed: ${params.generator_train_seed}
@@ -26,15 +27,16 @@ generators:
     min_log10_delta: -3
     max_log10_delta: -3
     path_to_csv: /scratches/cblgpu07/em626/dpconvcnp/_data/processed/small.csv
-    task_size: 512
+    num_ctx: 256
+    num_trg: 64
     mode: valid
     valid_fraction: 0.1
     test_fraction: 0.1
     property_types: ["T"]
     lease_types: ["F", "L"]
     age_types: ["Y", "N"]
-    min_coords: null # Set to [51.236282, -0.582550] for London only
-    max_coords: null # Set to [51.740789, 0.3210750] for London only
+    min_coords: [-0.582550, 51.236282] # null # Set to [-0.582550, 51.236282] for London only
+    max_coords: [0.3210750, 51.740789] # null # Set to [0.3210750, 51.740789] for London only
     reset_seed_at_epoch_end: true
 
 model:
@@ -63,7 +65,7 @@ dpsetconv:
 
 conv_net:
   _target_: dpconvcnp.model.conv.UNet
-  first_channels: 32
+  first_channels: 16
   last_channels: 2
   kernel_size: 5
   num_channels: [32, 32, 32, 32, 32]
