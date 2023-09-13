@@ -1,0 +1,98 @@
+generators:
+  train:
+    _target_: dpconvcnp.data.property.PropertyPriceDataGenerator
+    seed: ${params.generator_train_seed}
+    batch_size: 16
+    min_epsilon: 10.0
+    max_epsilon: 10.0
+    min_log10_delta: -3
+    max_log10_delta: -3
+    path_to_csv: /scratches/cblgpu07/em626/dpconvcnp/_data/processed/small.csv
+    task_size: 512
+    mode: train
+    valid_fraction: 0.1
+    test_fraction: 0.1
+    property_types: ["T"]
+    lease_types: ["F", "L"]
+    age_types: ["Y", "N"]
+    min_coords: null # Set to [51.236282, -0.582550] for London only
+    max_coords: null # Set to [51.740789, 0.3210750] for London only
+  valid:
+    _target_: dpconvcnp.data.property.PropertyPriceDataGenerator
+    seed: ${params.generator_train_seed}
+    batch_size: 16
+    min_epsilon: 10.0
+    max_epsilon: 10.0
+    min_log10_delta: -3
+    max_log10_delta: -3
+    path_to_csv: /scratches/cblgpu07/em626/dpconvcnp/_data/processed/small.csv
+    task_size: 512
+    mode: valid
+    valid_fraction: 0.1
+    test_fraction: 0.1
+    property_types: ["T"]
+    lease_types: ["F", "L"]
+    age_types: ["Y", "N"]
+    min_coords: null # Set to [51.236282, -0.582550] for London only
+    max_coords: null # Set to [51.740789, 0.3210750] for London only
+    reset_seed_at_epoch_end: true
+
+model:
+  _target_: dpconvcnp.model.dpconvcnp.DPConvCNP
+  dpsetconv_encoder: ${dpsetconv}
+  conv_net: ${conv_net}
+  setconv_decoder: ${setconv}
+
+dpsetconv:
+  _target_: dpconvcnp.model.setconv.DPSetConvEncoder
+  seed: ${params.dpsetconv_seed}
+  points_per_unit: ${params.points_per_unit}
+  dim: 2
+  margin: 0.1
+  lengthscale_init: 0.1
+  y_bound_init: 2.0
+  w_noise_init: 0.5
+  lengthscale_trainable: true
+  y_bound_trainable: true
+  w_noise_trainable: true
+  amortize_y_bound: true
+  amortize_w_noise: true
+  num_mlp_hidden_units: 32
+  xmin: [-1.0, -1.0]
+  xmax: [ 1.0,  1.0]
+
+conv_net:
+  _target_: dpconvcnp.model.conv.UNet
+  first_channels: 32
+  last_channels: 2
+  kernel_size: 5
+  num_channels: [32, 32, 32, 32, 32]
+  strides: [2, 2, 2, 2, 2]
+  dim: 2
+  seed: ${params.architecture_seed}
+  activation: relu
+
+setconv:
+  _target_: dpconvcnp.model.setconv.SetConvDecoder
+  lengthscale_init: 0.05
+  lengthscale_trainable: true
+  scaling_factor: ${eval:'${params.points_per_unit} ** 2'}
+  dim: 2
+
+optimizer:
+  _target_: tensorflow.keras.optimizers.Adam
+  learning_rate: 5e-4
+
+params:
+  epochs: 100
+  points_per_unit: 64
+  generator_train_seed: [0, 0]
+  generator_valid_seed: [0, 10]
+  architecture_seed: 20
+  dpsetconv_seed: 30
+  training_seed: [0, 40]
+  validation_seed: [0, 50]
+
+misc:
+  results_root: _experiments
+  experiment_name: null
