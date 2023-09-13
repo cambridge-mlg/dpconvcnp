@@ -28,7 +28,7 @@ def plot(
     figsize: Tuple[float, float] = (8.0, 6.0),
     x_range: Tuple[float, float] = (-5.0, 5.0),
     y_lim: Tuple[float, float] = (-3.0, 3.0),
-    points_per_dim: int = 512,
+    points_per_dim: int = 64,
 ):
     # Get dimension of input data
     dim = batches[0].x_ctx.shape[-1]
@@ -152,8 +152,69 @@ def plot(
             plt.close()
 
     else:
+
+        x_plot = np.linspace(x_range[0]-1e-1, x_range[1]+1e-1, points_per_dim)
+        x_plot = np.stack(np.meshgrid(x_plot, x_plot), axis=-1)[None, ...]
+
         for i in range(num_fig):
-            _, mean_trg, _ = model(
+
+            _, mean, std = model(
+                seed=seed,
+                x_ctx=batches[i].x_ctx[:1],
+                y_ctx=batches[i].y_ctx[:1],
+                x_trg=to_tensor(np.reshape(x_plot, (1, -1, 2)), f32),
+                epsilon=batches[i].epsilon[:1],
+                delta=batches[i].delta[:1],
+            )
+
+            mean = tf.reshape(mean, (1, points_per_dim, points_per_dim, 1))
+            mean = mean[0, ..., 0]
+            std = tf.reshape(std, (1, points_per_dim, points_per_dim, 1))
+            std = std[0, ..., 0]
+
+
+            plt.figure(figsize=(2*figsize[0], figsize[1]))
+            plt.subplot(1, 2, 1)
+
+            plt.scatter(
+                batches[i].x_ctx[0, :, 0],
+                batches[i].x_ctx[0, :, 1],
+                c=batches[i].y_ctx[0, :, 0],
+                marker="+",
+                s=20,
+                cmap="coolwarm",
+                zorder=2,
+                vmin=-3.0,
+                vmax=3.0,
+            )
+
+            plt.scatter(
+                batches[i].x_ctx[0, :, 0],
+                batches[i].x_ctx[0, :, 1],
+                c=batches[i].y_ctx[0, :, 0],
+                marker="o",
+                s=20,
+                cmap="coolwarm",
+                zorder=3,
+                vmin=-3.0,
+                vmax=3.0,
+            )
+
+            plt.contourf(
+                x_plot[0, ..., 0],
+                x_plot[0, ..., 1],
+                mean,
+                cmap="coolwarm",
+                zorder=1,
+                vmin=-3.0,
+                vmax=3.0,
+            )
+
+            plt.xlim([-4.0, 4.0])
+            plt.ylim([-4.0, 4.0])
+            
+
+            _, mean, std = model(
                 seed=seed,
                 x_ctx=batches[i].x_ctx[:1],
                 y_ctx=batches[i].y_ctx[:1],
@@ -162,97 +223,54 @@ def plot(
                 delta=batches[i].delta[:1],
             )
 
-            mean = tf.reduce_mean(batches[i].y_ctx[:1], axis=1, keepdims=True)
-            print(
-                f"RMSE: {tf.reduce_mean((mean_trg - batches[i].y_trg[:1])**2)**0.5:.3f} \n"
-                f"Signal RMSE: {tf.reduce_mean((batches[i].y_trg[:1] - mean)**2)**0.5:.3f} \n"
+            gt_pred = batches[i].gt_pred
+            gt_mean, gt_std, _ = gt_pred(
+                x_ctx=batches[i].x_ctx[:1],
+                y_ctx=batches[i].y_ctx[:1],
+                x_trg=batches[i].x_trg[:1],
             )
 
+            idx = np.argsort(gt_std[0, :, 0].numpy())
 
-def plot_property(
-    path: str,
-    model: tf.Module,
-    seed: Seed,
-    batches: List[Batch],
-    epoch: int = 0,
-    num_fig: int = 5,
-    figsize: Tuple[float, float] = (6.0, 6.0),
-    x_range: Tuple[float, float] = (-1.0, 1.0),
-    points_per_dim: int = 128,
-):
+            y_trg_ordered = batches[i].y_trg[0, :, 0].numpy()[idx]
+            mean_ordered = mean[0, :, 0].numpy()[idx]
+            std_ordered = std[0, :, 0].numpy()[idx]
+            gt_mean_ordered = gt_mean[0, :, 0].numpy()[idx]
+            gt_std_ordered = gt_std[0, :, 0].numpy()[idx]
 
-    # If path for figures does not exist, create it
-    os.makedirs(f"{path}/fig", exist_ok=True)
+            plt.subplot(1, 2, 2)
+            plt.scatter(
+                np.arange(len(y_trg_ordered)),
+                y_trg_ordered - gt_mean_ordered,
+                c="tab:red",
+                marker="o",
+                s=10,
+                zorder=3,
+            )
 
-    x_plot = np.linspace(x_range[0]-1e-1, x_range[1]+1e-1, points_per_dim)
-    x_plot = np.stack(np.meshgrid(x_plot, x_plot), axis=-1)[None, ...]
+            plt.errorbar(
+                np.arange(len(y_trg_ordered)),
+                mean_ordered - gt_mean_ordered,
+                yerr=1.96 * std_ordered,
+                c="black",
+                fmt="",
+                linestyle="",
+                capsize=2,
+                zorder=1,
+            )
 
-    for i in range(num_fig):
+            plt.errorbar(
+                np.arange(len(y_trg_ordered)),
+                gt_mean_ordered - gt_mean_ordered,
+                yerr=1.96 * gt_std_ordered,
+                c="tab:purple",
+                fmt="",
+                linestyle="",
+                capsize=2,
+                zorder=2,
+            )
+            plt.xticks([])
+            plt.yticks([])
 
-        _, mean, std = model(
-            seed=seed,
-            x_ctx=batches[i].x_ctx[:1],
-            y_ctx=batches[i].y_ctx[:1],
-            x_trg=to_tensor(np.reshape(x_plot, (1, -1, 2)), f32),
-            epsilon=batches[i].epsilon[:1],
-            delta=batches[i].delta[:1],
-        )
-
-        mean = tf.reshape(mean, (1, points_per_dim, points_per_dim, 1))
-        mean = mean[0, ..., 0]
-        std = tf.reshape(std, (1, points_per_dim, points_per_dim, 1))
-        std = std[0, ..., 0]
-
-        _, mean_trg, std_trg = model(
-            seed=seed,
-            x_ctx=batches[i].x_ctx[:1],
-            y_ctx=batches[i].y_ctx[:1],
-            x_trg=batches[i].x_trg[:1],
-            epsilon=batches[i].epsilon[:1],
-            delta=batches[i].delta[:1],
-        )
-
-        print(
-            f"RMSE        : {tf.reduce_mean((mean_trg - batches[i].y_trg[:1])**2)**0.5:.3f} \n"
-            f"Signal RMSE : {tf.reduce_mean((batches[i].y_trg[:1] - tf.reduce_mean(batches[i].y_ctx[:1], axis=1, keepdims=True))**2)**0.5:.3f} \n"
-            f"Pred mean   : {tf.reduce_mean(mean[:1]):.3f} \n"
-        )
-
-        plt.figure(figsize=figsize)
-        plt.scatter(
-            batches[i].x_ctx[0, :, 0],
-            batches[i].x_ctx[0, :, 1],
-            c=batches[i].y_ctx[0, :, 0],
-            s=10,
-            cmap="coolwarm",
-            zorder=2,
-            vmin=-2.0,
-            vmax=2.0,
-        )
-        plt.scatter(
-            batches[i].x_ctx[0, :, 0],
-            batches[i].x_ctx[0, :, 1],
-            c=batches[i].y_ctx[0, :, 0],
-            s=20,
-            cmap="coolwarm",
-            zorder=3,
-            vmin=-2.0,
-            vmax=2.0,
-        )
-
-        plt.contourf(
-            x_plot[0, ..., 0],
-            x_plot[0, ..., 1],
-            mean,
-            cmap="coolwarm",
-            zorder=1,
-            alpha=0.5,
-            vmin=-2.0,
-            vmax=2.0,
-        )
-
-        plt.xlim([-1.1, 1.1])
-        plt.ylim([-1.1, 1.1])
-
-        plt.savefig(f"{path}/fig/epoch-{epoch:04d}-{i:03d}.png")
-        plt.close()
+            plt.savefig(f"{path}/fig/epoch-{epoch:04d}-{i:03d}.png")
+            plt.close()

@@ -5,7 +5,7 @@ from check_shape import check_shape
 
 from dpconvcnp.random import zero_mean_mvn_on_grid_from_chol
 from dpconvcnp.random import Seed
-from dpconvcnp.utils import f64, cast, logit, to_tensor, expand_last_dims
+from dpconvcnp.utils import f64, f32, cast, logit, to_tensor, expand_last_dims
 from dpconvcnp.model.privacy_accounting import (
     sens_per_sigma as dp_sens_per_sigma,
 )
@@ -105,12 +105,12 @@ class DPSetConvEncoder(tf.Module):
         return tf.exp(self.log_lengthscales)
 
     def y_bound(self, sens_per_sigma: tf.Tensor) -> tf.Tensor:
-        y_bound = tf.exp(self.log_y_bound(sens_per_sigma=sens_per_sigma))[:, 0]
+        y_bound = tf.exp(self.log_y_bound(sens_per_sigma=sens_per_sigma))
         return y_bound + 1e-2
 
     def w_noise(self, sens_per_sigma: tf.Tensor) -> tf.Tensor:
         w_noise = tf.nn.sigmoid(
-            self.logit_w_noise(sens_per_sigma=sens_per_sigma)[:, 0]
+            self.logit_w_noise(sens_per_sigma=sens_per_sigma)
         )
         return (1 - 2e-2) * w_noise + 1e-2
 
@@ -118,12 +118,12 @@ class DPSetConvEncoder(tf.Module):
         y_bound = self.y_bound(sens_per_sigma=sens_per_sigma)
         w_noise = self.w_noise(sens_per_sigma=sens_per_sigma)
 
-        return 2.0 * y_bound / (sens_per_sigma * w_noise**0.5)
+        return 2.0 * y_bound[:, 0] / (sens_per_sigma * w_noise[:, 0] ** 0.5)
 
     def density_sigma(self, sens_per_sigma: tf.Tensor) -> tf.Tensor:
         w_noise = self.w_noise(sens_per_sigma=sens_per_sigma)
 
-        return 2**0.5 / (sens_per_sigma * (1 - w_noise) ** 0.5)
+        return 2**0.5 / (sens_per_sigma * (1 - w_noise[:, 0]) ** 0.5)
 
     def __call__(
         self,
@@ -163,9 +163,10 @@ class DPSetConvEncoder(tf.Module):
             )
             if self.xmin is None or self.xmax is None
             else make_grids(
-                xmin=self.xmin,
-                xmax=self.xmax,
+                xmin=tf.tile(self.xmin[None, :], [tf.shape(x_ctx)[0], 1]),
+                xmax=tf.tile(self.xmax[None, :], [tf.shape(x_ctx)[0], 1]),
                 points_per_unit=self.points_per_unit,
+                margin=self.margin,
             )
         )  # list of tensors of shape (batch_size, 2*N[d]+1)
 
@@ -190,7 +191,7 @@ class DPSetConvEncoder(tf.Module):
         z_grid = tf.reshape(
             z_grid_flat,
             shape=tf.concat(
-                [tf.shape(x_grid)[:-1], tf.shape(z_grid_flat)[-1:]], axis=0
+                [tf.shape(x_grid)[:-1], tf.shape(z_grid_flat)[-1:]], axis=0,
             ),
         )  # shape (batch_size, n1, ..., ndim, 2)
 
@@ -221,7 +222,7 @@ class DPSetConvEncoder(tf.Module):
                 context outputs.
         """
 
-        y_bound = self.y_bound(sens_per_sigma=sens_per_sigma[:, None])
+        y_bound = self.y_bound(sens_per_sigma=sens_per_sigma)[:, :, None]
         return tf.clip_by_value(y_ctx, -y_bound, y_bound)
 
     def sample_noise(
@@ -269,12 +270,12 @@ class DPSetConvEncoder(tf.Module):
         # Draw noise samples for the density and data channels
         seed, data_noise = zero_mean_mvn_on_grid_from_chol(
             seed=seed,
-            cov_chols=kxx_chol_dimension_wise,
+            cov_chols=kxx_chol_dimension_wise[::-1],
         )  # shape (batch_size, n1, ..., nd)
 
         seed, density_noise = zero_mean_mvn_on_grid_from_chol(
             seed=seed,
-            cov_chols=kxx_chol_dimension_wise,
+            cov_chols=kxx_chol_dimension_wise[::-1],
         )  # shape (batch_size, n1, ..., nd)
 
         # Convert back to input data types
@@ -467,7 +468,7 @@ def make_grids(
     # Take the maximum over the batch, in order to use the same number of
     # points across all tasks in the batch, to enable tensor batching
     N = tf.reduce_max(N, axis=0)  # shape (dim,)
-    N = 2 ** tf.math.ceil(tf.math.log(N) / tf.math.log(2.0))  # shape (dim,)
+    N = 2 ** tf.math.floor(tf.math.log(N) / tf.math.log(2.0))  # shape (dim,)
 
     # Compute midpoints of each dimension, multiply integer grid by the grid
     # spacing and add midpoint to obtain dimension-wise grids
@@ -483,7 +484,7 @@ def make_grids(
     # Compute multi-dimensional grid
     grid = tf.stack(
         tf.meshgrid(
-            *[tf.range(-N[i], N[i], dtype=xmin.dtype) for i in range(dim)]
+            *[tf.range(-N[-i], N[-i], dtype=xmin.dtype) for i in range(dim)]
         ),
         axis=-1,
     )  # shape (n1, n2, ..., ndim, dim)
@@ -533,11 +534,11 @@ def compute_eq_weights(
 
     # Compute pairwise distances between x1 and x2
     dist2 = tf.reduce_sum(
-        (x1 - x2) / lengthscales,
+        ((x1 - x2) / lengthscales)**2.0,
         axis=-1,
     )  # shape (batch_size, num_x1, num_x2)
 
     # Compute weights
-    weights = tf.exp(-0.5 * dist2**2.0)  # shape (batch_size, num_x1, num_x2)
+    weights = tf.exp(-0.5 * dist2)  # shape (batch_size, num_x1, num_x2)
 
     return weights
