@@ -150,8 +150,6 @@ def plot(
                 f"$\\epsilon$ = {info['epsilon']:.2f}  "
                 f"$N\\ell \\epsilon$ = {info['nle']:.0f}  "
                 f"$\\delta$ = {info['delta']:.3f}",
-                f"\nNLL = {model_nll:.3f} \t"
-                f"GT NLL = {gt_nll:.3f}",
                 fontsize=24,
             )
 
