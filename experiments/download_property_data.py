@@ -28,6 +28,10 @@ def get_latitudes_longitudes(postcodes: str) -> tuple:
         print("Error with decoding JSON, returning Nones...")
         return [None] * len(postcodes), [None] * len(postcodes)
 
+    except requests.exceptions.ChunkedEncodingError:
+        print("Error with request, returning Nones...")
+        return [None] * len(postcodes), [None] * len(postcodes)
+    
     if response["status"] != 200:
         print(f"Response status {response['status']}, returning Nones...")
         return [None] * len(postcodes), [None] * len(postcodes)
@@ -114,7 +118,7 @@ dataframes = [
 print("\nFinished loading, processing...")
 dataframes = [
     add_coordinates_to_dataframe(
-        dataframe[::100] if args.small_dataset else dataframe
+        dataframe[::10] if args.small_dataset else dataframe
     )
     for dataframe in tqdm(dataframes, desc="Processing dataframes")
 ]
