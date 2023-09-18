@@ -93,14 +93,10 @@ def train_epoch(
         # writer.add_scalar("lengthscale", model.dpsetconv_encoder.lengthscale, step)
 
         if not model.dpsetconv_encoder.amortize_y_bound:
-            writer.add_scalar(
-                "y_bound", model.dpsetconv_encoder.y_bound(None)[0], step
-            )
+            writer.add_scalar("y_bound", model.dpsetconv_encoder.y_bound(None)[0], step)
 
         if not model.dpsetconv_encoder.amortize_w_noise:
-            writer.add_scalar(
-                "w_noise", model.dpsetconv_encoder.w_noise(None)[0], step
-            )
+            writer.add_scalar("w_noise", model.dpsetconv_encoder.w_noise(None)[0], step)
 
         epoch.set_postfix(loss=f"{loss:.4f}")
 
@@ -128,9 +124,7 @@ def valid_epoch(
 
     batches = []
 
-    for batch in tqdm(
-        generator, total=generator.num_batches, desc="Validation"
-    ):
+    for batch in tqdm(generator, total=generator.num_batches, desc="Validation"):
         seed, loss, mean, std = model.loss(
             seed=seed,
             x_ctx=batch.x_ctx,
@@ -204,11 +198,7 @@ def evaluation_summary(
     ]
 
     num_ctx = np.array(
-        [
-            batch.x_ctx.shape[1]
-            for batch in batches
-            for _ in range(len(batch.x_ctx))
-        ]
+        [batch.x_ctx.shape[1] for batch in batches for _ in range(len(batch.x_ctx))]
     )
 
     lengthscale = np.array(
@@ -292,9 +282,7 @@ def gauss_gauss_kl_diag(
     return tfd.kl_divergence(dist_1, dist_2)
 
 
-def initialize_experiment() -> (
-    Tuple[DictConfig, str, str, Writer, ModelCheckpointer]
-):
+def initialize_experiment() -> (Tuple[DictConfig, str, str, Writer, ModelCheckpointer]):
     """Initialize experiment by parsing the config file, checking that the
     repo is clean, creating a path for the experiment, and creating a
     writer for tensorboard.
@@ -315,9 +303,7 @@ def initialize_experiment() -> (
     repo = git.Repo(search_parent_directories=True)
 
     # Check that the repo is clean
-    assert (
-        args.debug or not repo.is_dirty()
-    ), "Repo is dirty, please commit changes."
+    assert args.debug or not repo.is_dirty(), "Repo is dirty, please commit changes."
     assert args.debug or not has_commits_ahead(
         repo
     ), "Repo has commits ahead, please push changes."
@@ -357,15 +343,15 @@ def initialize_evaluation():
     args, config_changes = parser.parse_known_args()
 
     ## Create a repo object and check if local repo is clean
-    #repo = git.Repo(search_parent_directories=True)
+    # repo = git.Repo(search_parent_directories=True)
 
     ## Check that the repo is clean
-    #assert (
+    # assert (
     #    args.debug or not repo.is_dirty()
-    #), "Repo is dirty, please commit changes."
-    #assert args.debug or not has_commits_ahead(
+    # ), "Repo is dirty, please commit changes."
+    # assert args.debug or not has_commits_ahead(
     #    repo
-    #), "Repo has commits ahead, please push changes."
+    # ), "Repo has commits ahead, please push changes."
 
     # Initialize experiment, make path and writer
     OmegaConf.register_new_resolver("eval", eval)
@@ -378,7 +364,7 @@ def initialize_evaluation():
     evaluation = instantiate(evaluation_config)
 
     ## Check out commit hash -- only the model is loaded using this hash
-    #repo.git.checkout(f"{experiment_config.commit}", "dpconvcnp")
+    # repo.git.checkout(f"{experiment_config.commit}", "dpconvcnp")
 
     # Create model checkpointer and load model
     checkpointer = ModelCheckpointer(
@@ -399,6 +385,7 @@ def initialize_evaluation():
         os.makedirs(f"{experiment_path}/eval/{eval_name}")
 
     return (
+        experiment,
         model,
         list(evaluation.params.evaluation_seed),
         evaluation.generator,
@@ -422,9 +409,7 @@ def has_commits_ahead(repo: git.Repo) -> bool:
 
     else:
         current_branch = repo.active_branch.name
-        commits = list(
-            repo.iter_commits(f"origin/{current_branch}..{current_branch}")
-        )
+        commits = list(repo.iter_commits(f"origin/{current_branch}..{current_branch}"))
         return len(commits) > 0
 
 
@@ -458,8 +443,7 @@ def make_experiment_path(experiment: DictConfig) -> str:
 
     path = os.path.join(
         experiment.misc.results_root,
-        experiment.misc.experiment_name
-        or datetime.now().strftime("%m-%d-%H-%M-%S"),
+        experiment.misc.experiment_name or datetime.now().strftime("%m-%d-%H-%M-%S"),
     )
 
     if not os.path.exists(path):
