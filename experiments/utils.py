@@ -506,7 +506,7 @@ def get_batch_info(batch: Batch, idx: int) -> tf.Tensor:
     n = batch.x_ctx.shape[1]
     epsilon = batch.epsilon[idx].numpy()
     delta = batch.delta[idx].numpy()
-    lengthscale = batch.gt_pred.kernel.lengthscales.numpy()
+    lengthscale = batch.gt_pred.kernel.kernels[0].lengthscales.numpy()
 
     info = {
         "n": n,
