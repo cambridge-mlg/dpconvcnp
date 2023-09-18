@@ -24,7 +24,7 @@ def plot(
     seed: Seed,
     batches: List[Batch],
     epoch: int = 0,
-    num_fig: int = 3,
+    num_fig: int = 5,
     figsize: Tuple[float, float] = (8.0, 6.0),
     x_range: Tuple[float, float] = (-1.1, 1.1),
     y_lim: Tuple[float, float] = (-3.0, 3.0),
@@ -183,8 +183,8 @@ def plot(
                 s=20,
                 cmap="coolwarm",
                 zorder=2,
-                vmin=-1.5,
-                vmax=1.5,
+                vmin=-1.0,
+                vmax=1.0,
                 edgecolors="k",
                 linewidths=0.5,
             )
@@ -195,8 +195,8 @@ def plot(
                 mean,
                 cmap="coolwarm",
                 zorder=1,
-                vmin=-1.5,
-                vmax=1.5,
+                vmin=-1.0,
+                vmax=1.0,
             )
 
             plt.xlim(x_range)
@@ -234,9 +234,7 @@ def plot(
                 gt_mean_ordered = gt_mean[0, :, 0].numpy()[idx]
                 gt_std_ordered = gt_std[0, :, 0].numpy()[idx]
 
-            centering = (
-                gt_mean_ordered if gt_pred is not None else 0.
-            )
+            centering = gt_mean_ordered if gt_pred is not None else 0.0
 
             plt.subplot(1, 2, 2)
             plt.scatter(

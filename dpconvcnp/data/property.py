@@ -173,11 +173,20 @@ class PropertyPriceDataGenerator(DataGenerator):
         x = to_tensor(np.stack([lon, lat], axis=-1), f32)
         y = to_tensor(price, f32)[:, :, None]
 
+        x_ctx = x[:, : self.num_ctx, :]
+        y_ctx = y[:, : self.num_ctx, :]
+        x_trg = x[:, self.num_ctx :, :]
+        y_trg = y[:, self.num_ctx :, :]
+
+        y_ctx_mean = tf.reduce_mean(y_ctx, axis=1, keepdims=True)
+        y_ctx = y_ctx - y_ctx_mean
+        y_trg = y_trg - y_ctx_mean
+
         return seed, Batch(
             x=x,
             y=y,
-            x_ctx=x[:, : self.num_ctx, :],
-            y_ctx=y[:, : self.num_ctx, :],
-            x_trg=x[:, self.num_ctx :, :],
-            y_trg=y[:, self.num_ctx :, :],
+            x_ctx=x_ctx,
+            y_ctx=y_ctx,
+            x_trg=x_trg,
+            y_trg=y_trg,
         )

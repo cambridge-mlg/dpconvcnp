@@ -5,6 +5,8 @@ generator:
   kernel_type: eq
   min_log10_lengthscale: -0.602
   max_log10_lengthscale: -0.602
+  min_log10_noise_std: -0.699
+  max_log10_noise_std: -0.699
   noise_std: 0.2
   min_num_ctx: 1
   max_num_ctx: 512
