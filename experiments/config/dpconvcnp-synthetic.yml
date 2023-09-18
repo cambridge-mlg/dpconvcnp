@@ -4,13 +4,13 @@ generators:
     seed: ${params.generator_train_seed}
     dim: ${params.dim}
     kernel_type: eq
-    min_log10_lengthscale: 0. # -0.602
-    max_log10_lengthscale: 0. # -0.602
+    min_log10_lengthscale: -0.602
+    max_log10_lengthscale: -0.602
     noise_std: 0.2
     min_num_ctx: 1
-    max_num_ctx: 256
-    min_num_trg: 256
-    max_num_trg: 256
+    max_num_ctx: 512
+    min_num_trg: 512
+    max_num_trg: 512
     context_range: [[-2.0, 2.0]]
     target_range: [[-4.0, 4.0]]
     samples_per_epoch: 16384
@@ -24,16 +24,16 @@ generators:
     seed: ${params.generator_valid_seed}
     dim: ${params.dim}
     kernel_type: eq
-    min_log10_lengthscale: 0. # -0.602
-    max_log10_lengthscale: 0. # -0.602
+    min_log10_lengthscale: -0.602
+    max_log10_lengthscale: -0.602
     noise_std: 0.2
-    min_num_ctx: 256
-    max_num_ctx: 256
-    min_num_trg: 64
-    max_num_trg: 64
+    min_num_ctx: 1
+    max_num_ctx: 512
+    min_num_trg: 512
+    max_num_trg: 512
     context_range: [[-2.0, 2.0]]
     target_range: [[-4.0, 4.0]]
-    samples_per_epoch: 256 # 4096
+    samples_per_epoch: 4096
     batch_size: 16
     min_epsilon: 3
     max_epsilon: 3
