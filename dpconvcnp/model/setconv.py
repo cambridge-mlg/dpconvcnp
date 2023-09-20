@@ -210,7 +210,7 @@ class DPSetConvEncoder(tf.Module):
         z_grid = z_grid + noise
 
         # Concatenate noise standard deviation to grid
-        num_ctx = tf.reduce_sum(tf.ones_like(y_ctx), axis=[1, 2])
+        num_ctx = tf.reduce_sum(tf.ones_like(y_ctx[0, :, 0]))
         num_ctx = tf.ones_like(z_grid[..., :1]) * num_ctx / self.n_norm_factor
         z_grid = tf.concat([z_grid, noise_std, num_ctx], axis=-1)
 
