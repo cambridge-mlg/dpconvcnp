@@ -30,6 +30,7 @@ class DPSetConvEncoder(tf.Module):
         amortize_w_noise: bool,
         num_mlp_hidden_units: int,
         dim: int,
+        n_norm_factor: float = 512.,
         xmin: Optional[List[float]] = None,
         xmax: Optional[List[float]] = None,
         dtype: tf.DType = tf.float32,
@@ -85,6 +86,8 @@ class DPSetConvEncoder(tf.Module):
 
         self.xmin = to_tensor(xmin, dtype=dtype) if xmin is not None else None
         self.xmax = to_tensor(xmax, dtype=dtype) if xmax is not None else None
+
+        self.n_norm_factor = n_norm_factor
 
     def log_y_bound(self, sens_per_sigma: tf.Tensor) -> tf.Tensor:
         if self.amortize_y_bound:
@@ -191,7 +194,8 @@ class DPSetConvEncoder(tf.Module):
         z_grid = tf.reshape(
             z_grid_flat,
             shape=tf.concat(
-                [tf.shape(x_grid)[:-1], tf.shape(z_grid_flat)[-1:]], axis=0,
+                [tf.shape(x_grid)[:-1], tf.shape(z_grid_flat)[-1:]],
+                axis=0,
             ),
         )  # shape (batch_size, n1, ..., ndim, 2)
 
@@ -206,7 +210,9 @@ class DPSetConvEncoder(tf.Module):
         z_grid = z_grid + noise
 
         # Concatenate noise standard deviation to grid
-        z_grid = tf.concat([z_grid, noise_std], axis=-1)
+        num_ctx = tf.reduce_sum(tf.ones_like(y_ctx), axis=[1, 2])
+        num_ctx = tf.ones_like(z_grid[..., :1]) * num_ctx / self.n_norm_factor
+        z_grid = tf.concat([z_grid, noise_std, num_ctx], axis=-1)
 
         return seed, x_grid, z_grid
 
@@ -250,7 +256,7 @@ class DPSetConvEncoder(tf.Module):
 
         # Get input data type
         in_dtype = x_dimension_wise_grids[0].dtype
-        
+
         kxx_dimension_wise = [
             compute_eq_weights(
                 x1=cast(x_dimension_wise_grids[i][:, :, None], dtype=f64),
@@ -534,7 +540,7 @@ def compute_eq_weights(
 
     # Compute pairwise distances between x1 and x2
     dist2 = tf.reduce_sum(
-        ((x1 - x2) / lengthscales)**2.0,
+        ((x1 - x2) / lengthscales) ** 2.0,
         axis=-1,
     )  # shape (batch_size, num_x1, num_x2)
 
