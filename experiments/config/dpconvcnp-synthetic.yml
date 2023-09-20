@@ -52,7 +52,7 @@ dpsetconv:
   seed: ${params.dpsetconv_seed}
   points_per_unit: ${params.points_per_unit}
   dim: ${params.dim}
-  margin: 1.0
+  margin: 0.1
   lengthscale_init: 0.2
   y_bound_init: 2.0
   w_noise_init: 0.5
@@ -88,7 +88,7 @@ optimizer:
 params:
   epochs: 100
   dim: 1
-  points_per_unit: 16
+  points_per_unit: 32
   generator_train_seed: [0, 0]
   generator_valid_seed: [0, 10]
   architecture_seed: 20

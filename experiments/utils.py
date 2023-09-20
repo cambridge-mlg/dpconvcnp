@@ -218,7 +218,7 @@ def evaluation_summary(
 
     lengthscale = np.array(
         [
-            batch.gt_pred.kernel.lengthscales.numpy()
+            batch.gt_pred.kernel.kernels[0].lengthscales.numpy()
             for batch in batches
             for _ in range(len(batch.x_ctx))
         ]
