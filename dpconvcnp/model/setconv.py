@@ -468,7 +468,7 @@ def make_grids(
     # Take the maximum over the batch, in order to use the same number of
     # points across all tasks in the batch, to enable tensor batching
     N = tf.reduce_max(N, axis=0)  # shape (dim,)
-    N = 2 ** tf.math.floor(tf.math.log(N) / tf.math.log(2.0))  # shape (dim,)
+    N = 2 ** tf.math.ceil(tf.math.log(N) / tf.math.log(2.0))  # shape (dim,)
 
     # Compute midpoints of each dimension, multiply integer grid by the grid
     # spacing and add midpoint to obtain dimension-wise grids
