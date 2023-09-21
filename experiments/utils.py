@@ -476,8 +476,7 @@ def make_experiment_path(experiment: DictConfig) -> str:
         os.makedirs(path)
 
     else:
-        # raise ValueError(f"Path {path} already exists.")
-        pass
+        quit()
 
     return path
 
