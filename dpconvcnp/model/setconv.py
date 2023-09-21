@@ -30,7 +30,7 @@ class DPSetConvEncoder(tf.Module):
         amortize_w_noise: bool,
         num_mlp_hidden_units: int,
         dim: int,
-        n_norm_factor: float = 512.,
+        n_norm_factor: float = 512.0,
         xmin: Optional[List[float]] = None,
         xmax: Optional[List[float]] = None,
         dtype: tf.DType = tf.float32,
@@ -52,7 +52,7 @@ class DPSetConvEncoder(tf.Module):
         self.amortize_w_noise = amortize_w_noise
 
         if self.amortize_y_bound:
-            self._log_y_bound = TwoLayerMLP(
+            self._log_y_bound = MLP(
                 seed=seed,
                 num_hidden_units=num_mlp_hidden_units,
                 num_output_units=1,
@@ -68,7 +68,7 @@ class DPSetConvEncoder(tf.Module):
             )
 
         if self.amortize_w_noise:
-            self._logit_w_noise = TwoLayerMLP(
+            self._logit_w_noise = MLP(
                 seed=seed,
                 num_hidden_units=num_mlp_hidden_units,
                 num_output_units=1,
@@ -89,16 +89,16 @@ class DPSetConvEncoder(tf.Module):
 
         self.n_norm_factor = n_norm_factor
 
-    def log_y_bound(self, sens_per_sigma: tf.Tensor) -> tf.Tensor:
+    def log_y_bound(self, sens_num_ctx: tf.Tensor) -> tf.Tensor:
         if self.amortize_y_bound:
-            return self._log_y_bound(sens_per_sigma[:, None])
+            return self._log_y_bound(sens_num_ctx)
 
         else:
             return self._log_y_bound[None, None]
 
-    def logit_w_noise(self, sens_per_sigma: tf.Tensor) -> tf.Tensor:
+    def logit_w_noise(self, sens_num_ctx: tf.Tensor) -> tf.Tensor:
         if self.amortize_w_noise:
-            return self._logit_w_noise(sens_per_sigma[:, None])
+            return self._logit_w_noise(sens_num_ctx)
 
         else:
             return self._logit_w_noise[None, None]
@@ -107,24 +107,40 @@ class DPSetConvEncoder(tf.Module):
     def lengthscales(self) -> tf.Tensor:
         return tf.exp(self.log_lengthscales)
 
-    def y_bound(self, sens_per_sigma: tf.Tensor) -> tf.Tensor:
-        y_bound = tf.exp(self.log_y_bound(sens_per_sigma=sens_per_sigma))
+    def y_bound(self, sens_num_ctx: tf.Tensor) -> tf.Tensor:
+        y_bound = tf.exp(self.log_y_bound(sens_num_ctx=sens_num_ctx))
         return y_bound + 1e-2
 
-    def w_noise(self, sens_per_sigma: tf.Tensor) -> tf.Tensor:
+    def w_noise(self, sens_num_ctx: tf.Tensor) -> tf.Tensor:
         w_noise = tf.nn.sigmoid(
-            self.logit_w_noise(sens_per_sigma=sens_per_sigma)
+            self.logit_w_noise(sens_num_ctx=sens_num_ctx)
         )
         return (1 - 2e-2) * w_noise + 1e-2
 
-    def data_sigma(self, sens_per_sigma: tf.Tensor) -> tf.Tensor:
-        y_bound = self.y_bound(sens_per_sigma=sens_per_sigma)
-        w_noise = self.w_noise(sens_per_sigma=sens_per_sigma)
+    def data_sigma(
+        self,
+        sens_per_sigma: tf.Tensor,
+        num_ctx: tf.Tensor,
+    ) -> tf.Tensor:
+        sens_num_ctx = tf.stack(
+            [sens_per_sigma, num_ctx / self.n_norm_factor],
+            axis=-1,
+        )
+        y_bound = self.y_bound(sens_num_ctx=sens_num_ctx)
+        w_noise = self.w_noise(sens_num_ctx=sens_num_ctx)
 
         return 2.0 * y_bound[:, 0] / (sens_per_sigma * w_noise[:, 0] ** 0.5)
 
-    def density_sigma(self, sens_per_sigma: tf.Tensor) -> tf.Tensor:
-        w_noise = self.w_noise(sens_per_sigma=sens_per_sigma)
+    def density_sigma(
+        self,
+        sens_per_sigma: tf.Tensor,
+        num_ctx: tf.Tensor,
+    ) -> tf.Tensor:
+        sens_num_ctx = tf.stack(
+            [sens_per_sigma, num_ctx / self.n_norm_factor],
+            axis=-1,
+        )
+        w_noise = self.w_noise(sens_num_ctx=sens_num_ctx)
 
         return 2**0.5 / (sens_per_sigma * (1 - w_noise[:, 0]) ** 0.5)
 
@@ -200,17 +216,18 @@ class DPSetConvEncoder(tf.Module):
         )  # shape (batch_size, n1, ..., ndim, 2)
 
         # Sample noise and add it to the data and density channels
+        num_ctx = tf.reduce_sum(tf.ones_like(y_ctx[0, :, 0]))
         seed, noise, noise_std = self.sample_noise(
             seed=seed,
             x_dimension_wise_grids=x_dimension_wise_grids,
             sens_per_sigma=sens_per_sigma,
+            num_ctx=num_ctx,
         )
 
         # Add noise to data and density channels
         z_grid = z_grid + noise
 
         # Concatenate noise standard deviation to grid
-        num_ctx = tf.reduce_sum(tf.ones_like(y_ctx[0, :, 0]))
         num_ctx = tf.ones_like(z_grid[..., :1]) * num_ctx / self.n_norm_factor
         z_grid = tf.concat([z_grid, noise_std, num_ctx], axis=-1)
 
@@ -236,6 +253,7 @@ class DPSetConvEncoder(tf.Module):
         seed: Seed,
         x_dimension_wise_grids: List[tf.Tensor],
         sens_per_sigma: tf.Tensor,
+        num_ctx: tf.Tensor,
     ) -> Tuple[Seed, tf.Tensor, tf.Tensor]:
         """Sample noise for the density and data channels, returning the new
         seed, the noise tensor and the noise standard deviation tensor.
@@ -288,14 +306,18 @@ class DPSetConvEncoder(tf.Module):
         data_noise = cast(data_noise, dtype=in_dtype)
         density_noise = cast(density_noise, dtype=in_dtype)
 
+        # Get stacked tensors with sensitivity per sigma and number of context
+        # points, with the latter scaled down by the normalization factor
+        num_ctx = cast(num_ctx[:, None], f32)
+
         # Compute and expand data_sigma and density_sigma for broadcasting
         data_sigma = expand_last_dims(
-            self.data_sigma(sens_per_sigma=sens_per_sigma),
+            self.data_sigma(sens_per_sigma=sens_per_sigma, num_ctx=num_ctx),
             ndims=len(tf.shape(data_noise)) - 1,
         )  # shape (batch_size, 1, ..., 1)
 
         density_sigma = expand_last_dims(
-            self.density_sigma(sens_per_sigma=sens_per_sigma),
+            self.density_sigma(sens_per_sigma=sens_per_sigma, num_ctx=num_ctx),
             ndims=len(tf.shape(density_noise)) - 1,
         )  # shape (batch_size, 1, ..., 1)
 
@@ -381,7 +403,7 @@ class SetConvDecoder(tf.Module):
         return z_grid  # shape (batch_size, num_trg, Dz)
 
 
-class TwoLayerMLP(tf.Module):
+class MLP(tf.Module):
     def __init__(
         self,
         *,
@@ -389,8 +411,9 @@ class TwoLayerMLP(tf.Module):
         num_hidden_units: int,
         num_output_units: int,
         activation: str = "relu",
+        scaling_factor: float = 10.0,
         dtype: tf.DType = tf.float32,
-        name: str = "two_layer_mlp",
+        name: str = "mlp",
         **kwargs,
     ):
         super().__init__(name=name, **kwargs)
@@ -404,14 +427,24 @@ class TwoLayerMLP(tf.Module):
         seed = seed + 1
 
         self.dense2 = tfkl.Dense(
+            units=num_hidden_units,
+            activation=activation,
+            kernel_initializer=tf.initializers.GlorotUniform(seed=seed),
+            dtype=dtype,
+        )
+        seed = seed + 1
+
+        self.dense3 = tfkl.Dense(
             units=num_output_units,
             activation=None,
             kernel_initializer=tf.initializers.GlorotUniform(seed=seed),
             dtype=dtype,
         )
 
+        self.scaling_factor = scaling_factor
+
     def __call__(self, x: tf.Tensor) -> tf.Tensor:
-        return self.dense2(self.dense1(x))
+        return self.dense3(self.dense2(self.dense1(x))) / self.scaling_factor
 
 
 def make_adaptive_grids(
