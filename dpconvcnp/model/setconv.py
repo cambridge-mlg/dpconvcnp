@@ -112,9 +112,7 @@ class DPSetConvEncoder(tf.Module):
         return y_bound + 1e-2
 
     def w_noise(self, sens_num_ctx: tf.Tensor) -> tf.Tensor:
-        w_noise = tf.nn.sigmoid(
-            self.logit_w_noise(sens_num_ctx=sens_num_ctx)
-        )
+        w_noise = tf.nn.sigmoid(self.logit_w_noise(sens_num_ctx=sens_num_ctx))
         return (1 - 2e-2) * w_noise + 1e-2
 
     def data_sigma(
@@ -158,6 +156,8 @@ class DPSetConvEncoder(tf.Module):
             [x_ctx, y_ctx, x_trg],
             [("B", "C", "Dx"), ("B", "C", 1), ("B", "T", "Dx")],
         )
+        num_ctx = tf.reduce_sum(tf.ones_like(y_ctx[:, :, 0]), axis=1)
+        num_ctx = cast(num_ctx, f32)
 
         # Compute sensitivity per sigma
         sens_per_sigma = dp_sens_per_sigma(epsilon=epsilon, delta=delta)
@@ -166,6 +166,7 @@ class DPSetConvEncoder(tf.Module):
         y_ctx = self.clip_y(
             y_ctx=y_ctx,
             sens_per_sigma=sens_per_sigma,
+            num_ctx=num_ctx,
         )  # shape (batch_size, num_ctx, 1)
 
         y_ctx = tf.concat(
@@ -216,7 +217,6 @@ class DPSetConvEncoder(tf.Module):
         )  # shape (batch_size, n1, ..., ndim, 2)
 
         # Sample noise and add it to the data and density channels
-        num_ctx = tf.reduce_sum(tf.ones_like(y_ctx[0, :, 0]))
         seed, noise, noise_std = self.sample_noise(
             seed=seed,
             x_dimension_wise_grids=x_dimension_wise_grids,
@@ -228,12 +228,16 @@ class DPSetConvEncoder(tf.Module):
         z_grid = z_grid + noise
 
         # Concatenate noise standard deviation to grid
-        num_ctx = tf.ones_like(z_grid[..., :1]) * num_ctx / self.n_norm_factor
+        num_ctx = (
+            tf.ones_like(z_grid[..., :1]) * num_ctx[0] / self.n_norm_factor
+        )
         z_grid = tf.concat([z_grid, noise_std, num_ctx], axis=-1)
 
         return seed, x_grid, z_grid
 
-    def clip_y(self, sens_per_sigma: tf.Tensor, y_ctx: tf.Tensor) -> tf.Tensor:
+    def clip_y(
+        self, sens_per_sigma: tf.Tensor, num_ctx: tf.Tensor, y_ctx: tf.Tensor
+    ) -> tf.Tensor:
         """Clip the context outputs to be within the range [-y_bound, y_bound].
 
         Arguments:
@@ -244,8 +248,12 @@ class DPSetConvEncoder(tf.Module):
             Tensor of shape (batch_size, num_ctx, dim) containing the clipped
                 context outputs.
         """
+        sens_num_ctx = tf.stack(
+            [sens_per_sigma, num_ctx / self.n_norm_factor],
+            axis=-1,
+        )
 
-        y_bound = self.y_bound(sens_per_sigma=sens_per_sigma)[:, :, None]
+        y_bound = self.y_bound(sens_num_ctx=sens_num_ctx)[:, :, None]
         return tf.clip_by_value(y_ctx, -y_bound, y_bound)
 
     def sample_noise(
@@ -305,10 +313,6 @@ class DPSetConvEncoder(tf.Module):
         # Convert back to input data types
         data_noise = cast(data_noise, dtype=in_dtype)
         density_noise = cast(density_noise, dtype=in_dtype)
-
-        # Get stacked tensors with sensitivity per sigma and number of context
-        # points, with the latter scaled down by the normalization factor
-        num_ctx = cast(num_ctx[:, None], f32)
 
         # Compute and expand data_sigma and density_sigma for broadcasting
         data_sigma = expand_last_dims(
