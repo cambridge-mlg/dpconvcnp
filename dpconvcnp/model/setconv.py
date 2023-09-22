@@ -178,12 +178,12 @@ class DPSetConvEncoder(tf.Module):
         # Compute sensitivity per sigma
         sens_per_sigma = dp_sens_per_sigma(epsilon=epsilon, delta=delta)
 
-        # Clip context outputs and concatenate tensor of ones
-        y_ctx = self.clip_y(
-            y_ctx=y_ctx,
-            sens_per_sigma=sens_per_sigma,
-            num_ctx=num_ctx,
-        )  # shape (batch_size, num_ctx, 1)
+        ## Clip context outputs and concatenate tensor of ones
+        #y_ctx = self.clip_y(
+        #    y_ctx=y_ctx,
+        #    sens_per_sigma=sens_per_sigma,
+        #    num_ctx=num_ctx,
+        #)  # shape (batch_size, num_ctx, 1)
 
         y_ctx = tf.concat(
             [y_ctx, tf.ones_like(y_ctx)],
@@ -269,7 +269,7 @@ class DPSetConvEncoder(tf.Module):
             axis=-1,
         )
 
-        y_bound = self.y_bound(sens_num_ctx=sens_num_ctx)[:, :, None]
+        y_bound = self.y_bound(sens_per_sigma, num_ctx)[:, :, None]
         return tf.clip_by_value(y_ctx, -y_bound, y_bound)
 
     def sample_noise(
