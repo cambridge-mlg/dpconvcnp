@@ -51,7 +51,7 @@ class DPSetConvEncoder(tf.Module):
         self.amortize_y_bound = amortize_y_bound
         self.amortize_w_noise = amortize_w_noise
 
-        if False: # self.amortize_y_bound:
+        if False:  # self.amortize_y_bound:
             self._log_y_bound = MLP(
                 seed=seed,
                 num_hidden_units=num_mlp_hidden_units,
@@ -89,14 +89,30 @@ class DPSetConvEncoder(tf.Module):
 
         self.n_norm_factor = n_norm_factor
 
-    def log_y_bound(self, sens_num_ctx: tf.Tensor) -> tf.Tensor:
-        if False: # self.amortize_y_bound:
+    def log_y_bound(
+        self,
+        sens_per_sigma: tf.Tensor,
+        num_ctx: tf.Tensor,
+    ) -> tf.Tensor:
+        sens_num_ctx = tf.stack(
+            [sens_per_sigma**-1.0, num_ctx / self.n_norm_factor],
+            axis=-1,
+        )
+        if False:  # self.amortize_y_bound:
             return self._log_y_bound(sens_num_ctx)
 
         else:
             return self._log_y_bound[None, None]
 
-    def logit_w_noise(self, sens_num_ctx: tf.Tensor) -> tf.Tensor:
+    def logit_w_noise(
+        self,
+        sens_per_sigma: tf.Tensor,
+        num_ctx: tf.Tensor,
+    ) -> tf.Tensor:
+        sens_num_ctx = tf.stack(
+            [sens_per_sigma**-1.0, num_ctx / self.n_norm_factor],
+            axis=-1,
+        )
         if self.amortize_w_noise:
             return self._logit_w_noise(sens_num_ctx)
 
@@ -107,12 +123,20 @@ class DPSetConvEncoder(tf.Module):
     def lengthscales(self) -> tf.Tensor:
         return tf.exp(self.log_lengthscales)
 
-    def y_bound(self, sens_num_ctx: tf.Tensor) -> tf.Tensor:
-        y_bound = tf.exp(self.log_y_bound(sens_num_ctx=sens_num_ctx))
+    def y_bound(
+        self,
+        sens_per_sigma: tf.Tensor,
+        num_ctx: tf.Tensor,
+    ) -> tf.Tensor:
+        y_bound = tf.exp(self.log_y_bound(sens_per_sigma, num_ctx))
         return y_bound + 1e-2
 
-    def w_noise(self, sens_num_ctx: tf.Tensor) -> tf.Tensor:
-        w_noise = tf.nn.sigmoid(self.logit_w_noise(sens_num_ctx=sens_num_ctx))
+    def w_noise(
+        self,
+        sens_per_sigma: tf.Tensor,
+        num_ctx: tf.Tensor,
+    ) -> tf.Tensor:
+        w_noise = tf.nn.sigmoid(self.logit_w_noise(sens_per_sigma, num_ctx))
         return (1 - 2e-2) * w_noise + 1e-2
 
     def data_sigma(
@@ -120,12 +144,8 @@ class DPSetConvEncoder(tf.Module):
         sens_per_sigma: tf.Tensor,
         num_ctx: tf.Tensor,
     ) -> tf.Tensor:
-        sens_num_ctx = tf.stack(
-            [sens_per_sigma, num_ctx / self.n_norm_factor],
-            axis=-1,
-        )
-        y_bound = self.y_bound(sens_num_ctx=sens_num_ctx)
-        w_noise = self.w_noise(sens_num_ctx=sens_num_ctx)
+        y_bound = self.y_bound(sens_per_sigma=sens_per_sigma, num_ctx=num_ctx)
+        w_noise = self.w_noise(sens_per_sigma=sens_per_sigma, num_ctx=num_ctx)
 
         return 2.0 * y_bound[:, 0] / (sens_per_sigma * w_noise[:, 0] ** 0.5)
 
@@ -134,11 +154,7 @@ class DPSetConvEncoder(tf.Module):
         sens_per_sigma: tf.Tensor,
         num_ctx: tf.Tensor,
     ) -> tf.Tensor:
-        sens_num_ctx = tf.stack(
-            [sens_per_sigma, num_ctx / self.n_norm_factor],
-            axis=-1,
-        )
-        w_noise = self.w_noise(sens_num_ctx=sens_num_ctx)
+        w_noise = self.w_noise(sens_per_sigma=sens_per_sigma, num_ctx=num_ctx)
 
         return 2**0.5 / (sens_per_sigma * (1 - w_noise[:, 0]) ** 0.5)
 
