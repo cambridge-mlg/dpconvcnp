@@ -241,7 +241,7 @@ class DPSetConvEncoder(tf.Module):
         )
 
         # Add noise to data and density channels
-        z_grid = z_grid + noise
+        z_grid = z_grid # + noise
 
         # Concatenate noise standard deviation to grid
         num_ctx = (
