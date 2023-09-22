@@ -51,7 +51,7 @@ class DPSetConvEncoder(tf.Module):
         self.amortize_y_bound = amortize_y_bound
         self.amortize_w_noise = amortize_w_noise
 
-        if self.amortize_y_bound:
+        if False: # self.amortize_y_bound:
             self._log_y_bound = MLP(
                 seed=seed,
                 num_hidden_units=num_mlp_hidden_units,
@@ -90,7 +90,7 @@ class DPSetConvEncoder(tf.Module):
         self.n_norm_factor = n_norm_factor
 
     def log_y_bound(self, sens_num_ctx: tf.Tensor) -> tf.Tensor:
-        if self.amortize_y_bound:
+        if False: # self.amortize_y_bound:
             return self._log_y_bound(sens_num_ctx)
 
         else:
