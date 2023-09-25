@@ -86,7 +86,7 @@ optimizer:
   learning_rate: 5e-4
 
 params:
-  epochs: 100
+  epochs: 200
   dim: 1
   points_per_unit: 128
   generator_train_seed: [0, 0]
