@@ -68,8 +68,8 @@ conv_net:
   first_channels: 32
   last_channels: 2
   kernel_size: 5
-  num_channels: [32, 32, 32, 32, 32]
-  strides: [2, 2, 2, 2, 2]
+  num_channels: [64, 64, 64, 64, 64, 64, 64]
+  strides: [2, 2, 2, 2, 2, 2]
   dim: ${params.dim}
   seed: ${params.architecture_seed}
   activation: relu
@@ -88,7 +88,7 @@ optimizer:
 params:
   epochs: 70
   dim: 1
-  points_per_unit: 32
+  points_per_unit: 64
   generator_train_seed: [0, 0]
   generator_valid_seed: [0, 10]
   architecture_seed: 20

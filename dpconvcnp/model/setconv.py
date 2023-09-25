@@ -51,7 +51,7 @@ class DPSetConvEncoder(tf.Module):
         self.amortize_y_bound = amortize_y_bound
         self.amortize_w_noise = amortize_w_noise
 
-        if False:  # self.amortize_y_bound:
+        if self.amortize_y_bound:
             self._log_y_bound = MLP(
                 seed=seed,
                 num_hidden_units=num_mlp_hidden_units,
@@ -98,7 +98,7 @@ class DPSetConvEncoder(tf.Module):
             [sens_per_sigma**-1.0, num_ctx / self.n_norm_factor],
             axis=-1,
         )
-        if False:  # self.amortize_y_bound:
+        if self.amortize_y_bound:
             return self._log_y_bound(sens_num_ctx)
 
         else:
@@ -178,12 +178,12 @@ class DPSetConvEncoder(tf.Module):
         # Compute sensitivity per sigma
         sens_per_sigma = dp_sens_per_sigma(epsilon=epsilon, delta=delta)
 
-        ## Clip context outputs and concatenate tensor of ones
-        #y_ctx = self.clip_y(
-        #    y_ctx=y_ctx,
-        #    sens_per_sigma=sens_per_sigma,
-        #    num_ctx=num_ctx,
-        #)  # shape (batch_size, num_ctx, 1)
+        # Clip context outputs and concatenate tensor of ones
+        y_ctx = self.clip_y(
+            y_ctx=y_ctx,
+            sens_per_sigma=sens_per_sigma,
+            num_ctx=num_ctx,
+        )  # shape (batch_size, num_ctx, 1)
 
         y_ctx = tf.concat(
             [y_ctx, tf.ones_like(y_ctx)],
@@ -241,7 +241,7 @@ class DPSetConvEncoder(tf.Module):
         )
 
         # Add noise to data and density channels
-        z_grid = z_grid # + noise
+        z_grid = z_grid + noise
 
         # Concatenate noise standard deviation to grid
         num_ctx = (
@@ -264,11 +264,6 @@ class DPSetConvEncoder(tf.Module):
             Tensor of shape (batch_size, num_ctx, dim) containing the clipped
                 context outputs.
         """
-        sens_num_ctx = tf.stack(
-            [sens_per_sigma, num_ctx / self.n_norm_factor],
-            axis=-1,
-        )
-
         y_bound = self.y_bound(sens_per_sigma, num_ctx)[:, :, None]
         return tf.clip_by_value(y_ctx, -y_bound, y_bound)
 
@@ -527,7 +522,7 @@ def make_grids(
     # Take the maximum over the batch, in order to use the same number of
     # points across all tasks in the batch, to enable tensor batching
     N = tf.reduce_max(N, axis=0)  # shape (dim,)
-    N = 2 ** tf.math.ceil(tf.math.log(N) / tf.math.log(2.0))  # shape (dim,)
+    N = 2 ** tf.math.floor(tf.math.log(N) / tf.math.log(2.0))  # shape (dim,)
 
     # Compute midpoints of each dimension, multiply integer grid by the grid
     # spacing and add midpoint to obtain dimension-wise grids
