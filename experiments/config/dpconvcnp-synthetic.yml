@@ -52,7 +52,7 @@ dpsetconv:
   seed: ${params.dpsetconv_seed}
   points_per_unit: ${params.points_per_unit}
   dim: ${params.dim}
-  margin: 2.0
+  margin: 4.0
   lengthscale_init: 0.2
   y_bound_init: 2.0
   w_noise_init: 0.5
@@ -68,8 +68,8 @@ conv_net:
   first_channels: 32
   last_channels: 2
   kernel_size: 5
-  num_channels: [64, 64, 64, 64, 64, 64, 64, 64]
-  strides: [2, 2, 2, 2, 2, 2, 2, 2]
+  num_channels: [64, 64, 64, 64, 64, 64, 64]
+  strides: [2, 2, 2, 2, 2, 2, 2]
   dim: ${params.dim}
   seed: ${params.architecture_seed}
   activation: relu
@@ -86,9 +86,9 @@ optimizer:
   learning_rate: 5e-4
 
 params:
-  epochs: 70
+  epochs: 100
   dim: 1
-  points_per_unit: 256
+  points_per_unit: 128
   generator_train_seed: [0, 0]
   generator_valid_seed: [0, 10]
   architecture_seed: 20
