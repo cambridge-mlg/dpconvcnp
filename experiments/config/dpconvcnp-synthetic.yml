@@ -88,7 +88,7 @@ optimizer:
 params:
   epochs: 70
   dim: 1
-  points_per_unit: 32
+  points_per_unit: 256
   generator_train_seed: [0, 0]
   generator_valid_seed: [0, 10]
   architecture_seed: 20
