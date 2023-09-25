@@ -95,7 +95,7 @@ class DPSetConvEncoder(tf.Module):
         num_ctx: tf.Tensor,
     ) -> tf.Tensor:
         sens_num_ctx = tf.stack(
-            [sens_per_sigma**-1.0, num_ctx / self.n_norm_factor],
+            [sens_per_sigma, num_ctx / self.n_norm_factor],
             axis=-1,
         )
         if self.amortize_y_bound:
