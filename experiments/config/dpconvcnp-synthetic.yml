@@ -69,7 +69,7 @@ conv_net:
   last_channels: 2
   kernel_size: 5
   num_channels: [64, 64, 64, 64, 64, 64, 64]
-  strides: [2, 2, 2, 2, 2, 2]
+  strides: [2, 2, 2, 2, 2, 2, 2]
   dim: ${params.dim}
   seed: ${params.architecture_seed}
   activation: relu
