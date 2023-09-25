@@ -89,12 +89,12 @@ params:
   epochs: 70
   dim: 1
   points_per_unit: 64
-  generator_train_seed: [0, 0]
-  generator_valid_seed: [0, 10]
-  architecture_seed: 20
-  dpsetconv_seed: 30
-  training_seed: [0, 40]
-  validation_seed: [0, 50]
+  generator_train_seed: [0, 10]
+  generator_valid_seed: [0, 20]
+  architecture_seed: 30
+  dpsetconv_seed: 40
+  training_seed: [0, 50]
+  validation_seed: [0, 60]
 
 misc:
   results_root: _experiments
