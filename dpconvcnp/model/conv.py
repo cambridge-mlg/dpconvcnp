@@ -92,7 +92,7 @@ class UNet(tf.Module):
 
                 self.transposed_convs.append(
                     TRANSPOSE_CONV[dim](
-                        **shared_kwargs(num_channels[-i], kernel_size, 2, activation, seed)
+                        **shared_kwargs(num_channels[-i-1], kernel_size, 2, activation, seed)
                     )
                 )
                 seed += 1

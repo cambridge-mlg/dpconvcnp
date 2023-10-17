@@ -33,7 +33,7 @@ generators:
     max_num_trg: 512
     context_range: [[-2.0, 2.0]]
     target_range: [[-4.0, 4.0]]
-    samples_per_epoch: 4096
+    samples_per_epoch: 1024
     batch_size: 16
     min_epsilon: 3
     max_epsilon: 3
@@ -52,7 +52,7 @@ dpsetconv:
   seed: ${params.dpsetconv_seed}
   points_per_unit: ${params.points_per_unit}
   dim: ${params.dim}
-  margin: 2.5
+  margin: 0.4
   lengthscale_init: 0.2
   y_bound_init: 2.0
   w_noise_init: 0.5
@@ -65,11 +65,11 @@ dpsetconv:
 
 conv_net:
   _target_: dpconvcnp.model.conv.UNet
-  first_channels: 32
+  first_channels: 64
   last_channels: 2
   kernel_size: 5
-  num_channels: [64, 64, 64, 64, 64, 64, 64]
-  strides: [2, 2, 2, 2, 2, 2, 2]
+  num_channels: [64, 64, 64, 64, 64, 64]
+  strides: [2, 2, 2, 2, 2, 2]
   dim: ${params.dim}
   seed: ${params.architecture_seed}
   activation: relu
@@ -88,7 +88,7 @@ optimizer:
 params:
   epochs: 200
   dim: 1
-  points_per_unit: 128
+  points_per_unit: 32
   generator_train_seed: [0, 0]
   generator_valid_seed: [0, 10]
   architecture_seed: 20

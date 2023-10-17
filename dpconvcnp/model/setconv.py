@@ -29,11 +29,12 @@ class DPSetConvEncoder(tf.Module):
         amortize_y_bound: bool,
         amortize_w_noise: bool,
         num_mlp_hidden_units: int,
-        dim: int,
+        dim: Optional[int] = None,
         n_norm_factor: float = 512.0,
         xmin: Optional[List[float]] = None,
         xmax: Optional[List[float]] = None,
         dtype: tf.DType = tf.float32,
+        clip_y_ctx: bool = True,
         name="dp_set_conv",
         **kwargs,
     ):
@@ -41,7 +42,12 @@ class DPSetConvEncoder(tf.Module):
 
         self.points_per_unit = points_per_unit
 
-        lengthscale_init = to_tensor(dim * [lengthscale_init], dtype=dtype)
+        if dim is None:
+            lengthscale_init = to_tensor(lengthscale_init, dtype=dtype)
+
+        else:
+            lengthscale_init = to_tensor(dim * [lengthscale_init], dtype=dtype)
+
         self.log_lengthscales = tf.Variable(
             initial_value=tf.math.log(lengthscale_init),
             trainable=lengthscale_trainable,
@@ -86,6 +92,7 @@ class DPSetConvEncoder(tf.Module):
 
         self.xmin = to_tensor(xmin, dtype=dtype) if xmin is not None else None
         self.xmax = to_tensor(xmax, dtype=dtype) if xmax is not None else None
+        self.clip_y_ctx = clip_y_ctx
 
         self.n_norm_factor = n_norm_factor
 
@@ -94,11 +101,12 @@ class DPSetConvEncoder(tf.Module):
         sens_per_sigma: tf.Tensor,
         num_ctx: tf.Tensor,
     ) -> tf.Tensor:
-        sens_num_ctx = tf.stack(
-            [sens_per_sigma, num_ctx / self.n_norm_factor],
-            axis=-1,
-        )
+
         if self.amortize_y_bound:
+            sens_num_ctx = tf.stack(
+                [sens_per_sigma, num_ctx / self.n_norm_factor],
+                axis=-1,
+            )
             return self._log_y_bound(sens_num_ctx)
 
         else:
@@ -109,11 +117,11 @@ class DPSetConvEncoder(tf.Module):
         sens_per_sigma: tf.Tensor,
         num_ctx: tf.Tensor,
     ) -> tf.Tensor:
-        sens_num_ctx = tf.stack(
-            [sens_per_sigma**-1.0, num_ctx / self.n_norm_factor],
-            axis=-1,
-        )
         if self.amortize_w_noise:
+            sens_num_ctx = tf.stack(
+                [sens_per_sigma, num_ctx / self.n_norm_factor],
+                axis=-1,
+            )
             return self._logit_w_noise(sens_num_ctx)
 
         else:
@@ -179,11 +187,12 @@ class DPSetConvEncoder(tf.Module):
         sens_per_sigma = dp_sens_per_sigma(epsilon=epsilon, delta=delta)
 
         # Clip context outputs and concatenate tensor of ones
-        y_ctx = self.clip_y(
-            y_ctx=y_ctx,
-            sens_per_sigma=sens_per_sigma,
-            num_ctx=num_ctx,
-        )  # shape (batch_size, num_ctx, 1)
+        if self.clip_y_ctx:
+            y_ctx = self.clip_y(
+                y_ctx=y_ctx,
+                sens_per_sigma=sens_per_sigma,
+                num_ctx=num_ctx,
+            )  # shape (batch_size, num_ctx, 1)
 
         y_ctx = tf.concat(
             [y_ctx, tf.ones_like(y_ctx)],
@@ -252,7 +261,10 @@ class DPSetConvEncoder(tf.Module):
         return seed, x_grid, z_grid
 
     def clip_y(
-        self, sens_per_sigma: tf.Tensor, num_ctx: tf.Tensor, y_ctx: tf.Tensor
+        self,
+        sens_per_sigma: tf.Tensor,
+        num_ctx: tf.Tensor,
+        y_ctx: tf.Tensor,
     ) -> tf.Tensor:
         """Clip the context outputs to be within the range [-y_bound, y_bound].
 
