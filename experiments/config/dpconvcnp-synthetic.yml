@@ -52,8 +52,8 @@ dpsetconv:
   seed: ${params.dpsetconv_seed}
   points_per_unit: ${params.points_per_unit}
   dim: ${params.dim}
-  margin: 0.4
-  lengthscale_init: 0.2
+  margin: 2.5
+  lengthscale_init: 0.1
   y_bound_init: 2.0
   w_noise_init: 0.5
   lengthscale_trainable: true
@@ -65,7 +65,7 @@ dpsetconv:
 
 conv_net:
   _target_: dpconvcnp.model.conv.UNet
-  first_channels: 64
+  first_channels: 32
   last_channels: 2
   kernel_size: 5
   num_channels: [64, 64, 64, 64, 64, 64]
