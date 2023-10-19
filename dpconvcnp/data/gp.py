@@ -332,6 +332,7 @@ class GPWithPrivateOutputsNonprivateInputs:
         # Compute matrices needed for mean and covariance calculations
         K = gen_kernel_noiseless(tf.concat([c, t], axis=1))
         K_cc = K[:, :num_ctx, :num_ctx]
+        K_cc = K_cc + 1e-6 * tf.eye(tf.shape(K_cc)[1], dtype=f64)[None, :, :]
         K_ct = K[:, :num_ctx, num_ctx:]
         K_tc = K[:, num_ctx:, :num_ctx]
         K_tt = K[:, num_ctx:, num_ctx:]
