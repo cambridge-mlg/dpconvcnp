@@ -319,7 +319,7 @@ class GPWithPrivateOutputsNonprivateInputs:
         gen_noise_std = cast(gen_noise_std, f64)
 
         # Get number of context points
-        num_ctx = x_ctx.shape[1]
+        num_ctx = c.shape[1]
 
         # Compute DP noise for outputs
         sens_per_sigma = dp_sens_per_sigma(epsilon=epsilon, delta=delta)
@@ -330,12 +330,12 @@ class GPWithPrivateOutputsNonprivateInputs:
         data_sigma = cast(data_sigma, f64)
 
         # Compute matrices needed for mean and covariance calculations
-        K = gen_kernel_noiseless(cast(tf.concat([x_ctx, x_trg], axis=1), f64))
+        K = gen_kernel_noiseless(tf.concat([c, t], axis=1))
         K_cc = K[:, :num_ctx, :num_ctx]
         K_ct = K[:, :num_ctx, num_ctx:]
         K_tc = K[:, num_ctx:, :num_ctx]
         K_tt = K[:, num_ctx:, num_ctx:]
-        K_cc_plus_noise = gen_kernel(cast(x_ctx, f64))
+        K_cc_plus_noise = gen_kernel(c)
 
         K_prime_gg = compute_eq_weights(g, g, lengthscales)
         K_prime_gg = data_sigma[:, None, None] ** 2.0 * K_prime_gg
