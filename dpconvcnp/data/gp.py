@@ -289,6 +289,8 @@ class GPWithPrivateOutputsNonprivateInputs:
 
         self.lengthscales = self.dpsetconv.lengthscales
 
+
+    @tf.function(reduce_retracing=True)
     def __call__(
         self,
         seed: Seed,
@@ -310,9 +312,14 @@ class GPWithPrivateOutputsNonprivateInputs:
         c = cast(flatten_grid(x_ctx), f64)
         t = cast(flatten_grid(x_trg), f64)
         z = cast(flatten_grid(z)[..., :1], f64)
+
+        # Cast to f64
         y_trg = cast(y_trg, f64) if y_trg is not None else None
         lengthscales = cast(self.lengthscales, f64)
         gen_noise_std = cast(gen_noise_std, f64)
+
+        # Get number of context points
+        num_ctx = x_ctx.shape[1]
 
         # Compute DP noise for outputs
         sens_per_sigma = dp_sens_per_sigma(epsilon=epsilon, delta=delta)
@@ -323,28 +330,12 @@ class GPWithPrivateOutputsNonprivateInputs:
         data_sigma = cast(data_sigma, f64)
 
         # Compute matrices needed for mean and covariance calculations
-        K_cc = tf.stack(
-            [gen_kernel_noiseless(c[i], c[i]) for i in range(c.shape[0])],
-            axis=0,
-        )
-        K_cc = K_cc + 1e-6 * tf.eye(K_cc.shape[1], dtype=f64)[None, :, :]
-
-        K_tt = tf.stack(
-            [gen_kernel_noiseless(t[i], t[i]) for i in range(x_trg.shape[0])],
-            axis=0,
-        )
-        K_tc = tf.stack(
-            [gen_kernel_noiseless(t[i], c[i]) for i in range(x_trg.shape[0])],
-            axis=0,
-        )
-        K_ct = tf.stack(
-            [gen_kernel_noiseless(c[i], t[i]) for i in range(x_trg.shape[0])],
-            axis=0,
-        )
-        K_cc_plus_noise = tf.stack(
-            [gen_kernel(c[i], c[i]) for i in range(c.shape[0])],
-            axis=0,
-        )
+        K = gen_kernel_noiseless(cast(tf.concat([x_ctx, x_trg], axis=1), f64))
+        K_cc = K[:, :num_ctx, :num_ctx]
+        K_ct = K[:, :num_ctx, num_ctx:]
+        K_tc = K[:, num_ctx:, :num_ctx]
+        K_tt = K[:, num_ctx:, num_ctx:]
+        K_cc_plus_noise = gen_kernel(cast(x_ctx, f64))
 
         K_prime_gg = compute_eq_weights(g, g, lengthscales)
         K_prime_gg = data_sigma[:, None, None] ** 2.0 * K_prime_gg
@@ -353,16 +344,16 @@ class GPWithPrivateOutputsNonprivateInputs:
         Phi_cg = compute_eq_weights(c, g, lengthscales)
 
         # Compute covariance matrices
-        C_ff = K_cc + 1e-6 * tf.eye(K_cc.shape[1], dtype=f64)[None, :, :]
+        C_ff = K_cc + 1e-6 * tf.eye(tf.shape(K_cc)[1], dtype=f64)[None, :, :]
         C_hh = tf.matmul(Phi_gc, tf.matmul(K_cc_plus_noise, Phi_cg))
         C_hh = C_hh + K_prime_gg
-        C_hh = C_hh + 1e-6 * tf.eye(C_hh.shape[1], dtype=f64)[None, :, :]
+        C_hh = C_hh + 1e-6 * tf.eye(tf.shape(C_hh)[1], dtype=f64)[None, :, :]
         C_hf = tf.matmul(Phi_gc, K_cc)
         C_fh = tf.matmul(K_cc, Phi_cg)
 
         m = tf.matmul(C_fh, tf.linalg.solve(C_hh, z))
         C = C_ff - tf.matmul(C_fh, tf.linalg.solve(C_hh, C_hf))
-        C = C + 1e-6 * tf.eye(C.shape[1], dtype=f64)[None, :, :]
+        C = C + 1e-6 * tf.eye(tf.shape(C)[1], dtype=f64)[None, :, :]
 
         mean = tf.matmul(K_tc, tf.linalg.solve(K_cc, m))
         A = tf.matmul(Phi_gc, K_ct)
