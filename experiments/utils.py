@@ -139,13 +139,13 @@ def valid_epoch(
 
     y_bound = (
         model.dpsetconv_encoder.y_bound(None, None)[0, 0]
-        if model.dpsetconv_encoder.amortize_y_bound
+        if not model.dpsetconv_encoder.amortize_y_bound
         else None
     )
 
     w_noise = (
         model.dpsetconv_encoder.w_noise(None, None)[0, 0]
-        if model.dpsetconv_encoder.amortize_w_noise
+        if not model.dpsetconv_encoder.amortize_w_noise
         else None
     )
 
@@ -189,7 +189,6 @@ def valid_epoch(
             result["gt_mean"].append(gt_mean[:, :, 0])
             result["gt_std"].append(gt_std[:, :, 0])
             result["gt_loss"].append(gt_loss)
-
 
             result["kl_diag"].append(
                 tf.reduce_mean(
