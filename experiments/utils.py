@@ -120,7 +120,7 @@ def valid_epoch(
     generator: DataGenerator,
     epoch: Optional[int] = None,
     writer: Optional[Writer] = None,
-    fast_validation: bool = True,
+    fast_validation: bool = False,
 ) -> Tuple[Seed, Dict[str, tf.Tensor], List[Batch]]:
     result = {
         "kl_diag": [],
