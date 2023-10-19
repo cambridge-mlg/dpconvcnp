@@ -26,7 +26,7 @@ def plot(
     epoch: int = 0,
     num_fig: int = 5,
     figsize: Tuple[float, float] = (8.0, 6.0),
-    x_range: Tuple[float, float] = (-5.0, 5.0),
+    x_range: Tuple[float, float] = (-7.0, 7.0),
     y_lim: Tuple[float, float] = (-3.0, 3.0),
     points_per_dim: int = 128,
 ):

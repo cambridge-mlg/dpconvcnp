@@ -120,6 +120,7 @@ def valid_epoch(
     generator: DataGenerator,
     epoch: Optional[int] = None,
     writer: Optional[Writer] = None,
+    fast_validation: bool = True,
 ) -> Tuple[Seed, Dict[str, tf.Tensor], List[Batch]]:
     result = {
         "kl_diag": [],
@@ -185,33 +186,10 @@ def valid_epoch(
             )
             gt_loss = -gt_log_lik / batch.y_trg.shape[1]
 
-            (
-                seed,
-                _,
-                ideal_mean,
-                ideal_std,
-                ideal_log_lik,
-            ) = idealised_predictor(
-                seed=seed,
-                x_ctx=batch.x_ctx,
-                y_ctx=batch.y_ctx,
-                x_trg=batch.x_trg,
-                y_trg=batch.y_trg,
-                epsilon=batch.epsilon,
-                delta=batch.delta,
-                gen_kernel=batch.gt_pred.kernel,
-                gen_kernel_noiseless=batch.gt_pred.kernel_noiseless,
-                gen_noise_std=batch.gt_pred.noise_std,
-            )
-            ideal_loss = -ideal_log_lik / batch.y_trg.shape[1]
-
             result["gt_mean"].append(gt_mean[:, :, 0])
             result["gt_std"].append(gt_std[:, :, 0])
             result["gt_loss"].append(gt_loss)
 
-            result["ideal_mean"].append(ideal_mean[:, :, 0])
-            result["ideal_std"].append(ideal_std)
-            result["ideal_loss"].append(ideal_loss)
 
             result["kl_diag"].append(
                 tf.reduce_mean(
@@ -224,6 +202,32 @@ def valid_epoch(
                     axis=[1, 2],
                 )
             )
+
+            if not fast_validation:
+                (
+                    seed,
+                    _,
+                    ideal_mean,
+                    ideal_std,
+                    ideal_log_lik,
+                ) = idealised_predictor(
+                    seed=seed,
+                    x_ctx=batch.x_ctx,
+                    y_ctx=batch.y_ctx,
+                    x_trg=batch.x_trg,
+                    y_trg=batch.y_trg,
+                    epsilon=batch.epsilon,
+                    delta=batch.delta,
+                    gen_kernel=batch.gt_pred.kernel,
+                    gen_kernel_noiseless=batch.gt_pred.kernel_noiseless,
+                    gen_noise_std=batch.gt_pred.noise_std,
+                )
+                ideal_loss = -ideal_log_lik / batch.y_trg.shape[1]
+                
+                result["ideal_mean"].append(ideal_mean[:, :, 0])
+                result["ideal_std"].append(ideal_std)
+                result["ideal_loss"].append(ideal_loss)
+
 
         batches.append(batch)
 
@@ -273,12 +277,6 @@ def evaluation_summary(
     evaluation_result: Dict[str, tf.Tensor],
     batches: List[Batch],
 ):
-    # Get batch information
-    batch_info = [
-        get_batch_info(batch, idx)
-        for batch in batches
-        for idx in range(len(batch.x_ctx))
-    ]
 
     num_ctx = np.array(
         [
