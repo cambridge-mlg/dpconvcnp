@@ -130,9 +130,12 @@ def valid_epoch(
         "gt_mean": [],
         "gt_std": [],
         "gt_loss": [],
-        "ideal_mean": [],
-        "ideal_std": [],
-        "ideal_loss": [],
+        "ideal_full_mean": [],
+        "ideal_full_std": [],
+        "ideal_full_loss": [],
+        "ideal_channel_mean": [],
+        "ideal_channel_std": [],
+        "ideal_channel_loss": [],
     }
 
     batches = []
@@ -186,29 +189,32 @@ def valid_epoch(
             )
 
             if not fast_validation:
-                (
-                    seed,
-                    _,
-                    ideal_mean,
-                    ideal_std,
-                    ideal_log_lik,
-                ) = idealised_predictor(
-                    seed=seed,
-                    x_ctx=batch.x_ctx,
-                    y_ctx=batch.y_ctx,
-                    x_trg=batch.x_trg,
-                    y_trg=batch.y_trg,
-                    epsilon=batch.epsilon,
-                    delta=batch.delta,
-                    gen_kernel=batch.gt_pred.kernel,
-                    gen_kernel_noiseless=batch.gt_pred.kernel_noiseless,
-                    gen_noise_std=batch.gt_pred.noise_std,
-                )
-                ideal_loss = -ideal_log_lik / batch.y_trg.shape[1]
+                for override in [True, False]:
+                    prefix = "ideal_full" if override else "ideal_channel"
 
-                result["ideal_mean"].append(ideal_mean[:, :, 0])
-                result["ideal_std"].append(ideal_std)
-                result["ideal_loss"].append(ideal_loss)
+                    (
+                        seed,
+                        _,
+                        ideal_mean,
+                        ideal_std,
+                        ideal_log_lik,
+                    ) = idealised_predictor(
+                        seed=seed,
+                        x_ctx=batch.x_ctx,
+                        y_ctx=batch.y_ctx,
+                        x_trg=batch.x_trg,
+                        y_trg=batch.y_trg,
+                        epsilon=batch.epsilon,
+                        delta=batch.delta,
+                        gen_kernel=batch.gt_pred.kernel,
+                        gen_kernel_noiseless=batch.gt_pred.kernel_noiseless,
+                        gen_noise_std=batch.gt_pred.noise_std,
+                    )
+                    ideal_loss = -ideal_log_lik / batch.y_trg.shape[1]
+
+                    result[f"{prefix}_mean"].append(ideal_mean[:, :, 0])
+                    result[f"{prefix}_std"].append(ideal_std)
+                    result[f"{prefix}_loss"].append(ideal_loss)
 
         batches.append(batch)
 
@@ -225,10 +231,18 @@ def valid_epoch(
         result["gt_loss"] = tf.concat(result["gt_loss"], axis=0)
         result["mean_gt_loss"] = tf.reduce_mean(result["gt_loss"])
 
-    if len(result["ideal_loss"]) > 0:
-        result["ideal_loss"] = tf.concat(result["ideal_loss"], axis=0)
-        result["mean_ideal_loss"] = tf.reduce_mean(result["ideal_loss"])
+    for override in [True, False]:
+        prefix = "ideal_full" if override else "ideal_channel"
 
+        if len(result[f"{prefix}_loss"]) > 0:
+            result[f"{prefix}_loss"] = tf.concat(
+                result[f"{prefix}_loss"],
+                axis=0,
+            )
+            result[f"mean_{prefix}_loss"] = tf.reduce_mean(
+                result[f"{prefix}_loss"],
+            )
+        
     result["epsilon"] = tf.concat([b.epsilon for b in batches], axis=0)
     result["delta"] = tf.concat([b.delta for b in batches], axis=0)
 
@@ -243,12 +257,15 @@ def valid_epoch(
                 epoch,
             )
 
-        if len(result["ideal_loss"]) > 0:
-            writer.add_scalar(
-                "val/ideal_loss",
-                result["mean_ideal_loss"],
-                epoch,
-            )
+        for override in [True, False]:
+            prefix = "ideal_full" if override else "ideal_channel"
+
+            if len(result[f"{prefix}_loss"]) > 0:
+                writer.add_scalar(
+                    f"val/{prefix}_loss",
+                    result[f"mean_{prefix}_loss"],
+                    epoch,
+                )
 
     return seed, result, batches
 

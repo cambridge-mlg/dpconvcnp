@@ -282,6 +282,7 @@ class GPWithPrivateOutputsNonprivateInputs:
         y_ctx: tf.Tensor,
         x_trg: tf.Tensor,
         y_trg: Optional[tf.Tensor] = None,
+        override_w_noise: bool = False,
     ) -> Tuple[tf.Tensor, tf.Tensor]:
         # Pass data through dpsetconv
         seed, g, z = self.dpsetconv(
@@ -314,6 +315,7 @@ class GPWithPrivateOutputsNonprivateInputs:
         data_sigma = self.dpsetconv.data_sigma(
             sens_per_sigma=sens_per_sigma,
             num_ctx=num_ctx_f32,
+            override_w_noise=override_w_noise,
         )
         data_sigma = cast(data_sigma, f64)
 

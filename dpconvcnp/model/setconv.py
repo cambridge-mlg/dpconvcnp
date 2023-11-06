@@ -147,9 +147,13 @@ class DPSetConvEncoder(tf.Module):
         self,
         sens_per_sigma: tf.Tensor,
         num_ctx: tf.Tensor,
+        override_w_noise: bool = False,
     ) -> tf.Tensor:
         y_bound = self.y_bound(sens_per_sigma=sens_per_sigma, num_ctx=num_ctx)
         w_noise = self.w_noise(sens_per_sigma=sens_per_sigma, num_ctx=num_ctx)
+
+        if override_w_noise:
+            w_noise = tf.ones_like(w_noise)
 
         return 2.0 * y_bound[:, 0] / (sens_per_sigma * w_noise[:, 0] ** 0.5)
 
