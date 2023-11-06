@@ -209,6 +209,7 @@ def valid_epoch(
                         gen_kernel=batch.gt_pred.kernel,
                         gen_kernel_noiseless=batch.gt_pred.kernel_noiseless,
                         gen_noise_std=batch.gt_pred.noise_std,
+                        override_w_noise=override,
                     )
                     ideal_loss = -ideal_log_lik / batch.y_trg.shape[1]
 
