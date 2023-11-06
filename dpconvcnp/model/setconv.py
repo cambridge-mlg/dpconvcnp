@@ -175,6 +175,7 @@ class DPSetConvEncoder(tf.Module):
         epsilon: tf.Tensor,
         delta: tf.Tensor,
         clip_y_ctx: bool = True,
+        override_w_noise: bool = False,
     ) -> Tuple[Seed, tf.Tensor, tf.Tensor]:
         num_ctx = tf.reduce_sum(tf.ones_like(y_ctx[:, :, 0]), axis=1)
         num_ctx = cast(num_ctx, f32)
@@ -243,6 +244,7 @@ class DPSetConvEncoder(tf.Module):
             x_dimension_wise_grids=x_dimension_wise_grids,
             sens_per_sigma=sens_per_sigma,
             num_ctx=num_ctx,
+            override_w_noise=override_w_noise,
         )
 
         # Add noise to data and density channels
@@ -281,6 +283,7 @@ class DPSetConvEncoder(tf.Module):
         x_dimension_wise_grids: List[tf.Tensor],
         sens_per_sigma: tf.Tensor,
         num_ctx: tf.Tensor,
+        override_w_noise: bool = False,
     ) -> Tuple[Seed, tf.Tensor, tf.Tensor]:
         """Sample noise for the density and data channels, returning the new
         seed, the noise tensor and the noise standard deviation tensor.
@@ -335,7 +338,11 @@ class DPSetConvEncoder(tf.Module):
 
         # Compute and expand data_sigma and density_sigma for broadcasting
         data_sigma = expand_last_dims(
-            self.data_sigma(sens_per_sigma=sens_per_sigma, num_ctx=num_ctx),
+            self.data_sigma(
+                sens_per_sigma=sens_per_sigma,
+                num_ctx=num_ctx,
+                override_w_noise=override_w_noise,
+            ),
             ndims=len(tf.shape(data_noise)) - 1,
         )  # shape (batch_size, 1, ..., 1)
 

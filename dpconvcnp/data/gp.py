@@ -293,6 +293,7 @@ class GPWithPrivateOutputsNonprivateInputs:
             epsilon,
             delta,
             clip_y_ctx=False,
+            override_w_noise=override_w_noise,
         )
 
         # Flatten grids and keep only data channel from z
