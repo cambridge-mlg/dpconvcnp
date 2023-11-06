@@ -137,25 +137,8 @@ def valid_epoch(
 
     batches = []
 
-    y_bound = (
-        model.dpsetconv_encoder.y_bound(None, None)[0, 0]
-        if not model.dpsetconv_encoder.amortize_y_bound
-        else None
-    )
-
-    w_noise = (
-        model.dpsetconv_encoder.w_noise(None, None)[0, 0]
-        if not model.dpsetconv_encoder.amortize_w_noise
-        else None
-    )
-
     idealised_predictor = GPWithPrivateOutputsNonprivateInputs(
-        seed=[0, 0],
-        dpsetconv_lengthscale=model.dpsetconv_encoder.lengthscales,
-        points_per_unit=model.dpsetconv_encoder.points_per_unit,
-        margin=model.dpsetconv_encoder.margin,
-        y_bound=y_bound,
-        w_noise=w_noise,
+        dpsetconv=model.dpsetconv_encoder,
     )
 
     for batch in tqdm(
@@ -222,11 +205,10 @@ def valid_epoch(
                     gen_noise_std=batch.gt_pred.noise_std,
                 )
                 ideal_loss = -ideal_log_lik / batch.y_trg.shape[1]
-                
+
                 result["ideal_mean"].append(ideal_mean[:, :, 0])
                 result["ideal_std"].append(ideal_std)
                 result["ideal_loss"].append(ideal_loss)
-
 
         batches.append(batch)
 
@@ -276,7 +258,6 @@ def evaluation_summary(
     evaluation_result: Dict[str, tf.Tensor],
     batches: List[Batch],
 ):
-
     num_ctx = np.array(
         [
             batch.x_ctx.shape[1]
