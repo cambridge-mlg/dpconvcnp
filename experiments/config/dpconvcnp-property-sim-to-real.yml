@@ -4,41 +4,41 @@ generators:
     seed: ${params.generator_train_seed}
     dim: ${params.dim}
     kernel_type: eq
-    min_log10_lengthscale: -0.602
-    max_log10_lengthscale: -0.602
-    noise_std: 0.2
+    min_log10_lengthscale: -1.000 # [-1.301, -1.301]
+    max_log10_lengthscale: -1.000 # [-1.000, -1.000]
+    min_log10_noise_std: -1.000
+    max_log10_noise_std: -0.903
     min_num_ctx: 1
     max_num_ctx: 512
     min_num_trg: 512
     max_num_trg: 512
-    context_range: [[-2.0, 2.0]]
-    target_range: [[-6.0, 6.0]]
-    samples_per_epoch: 16384
+    context_range: [[-1.0, 1.0]]
+    target_range: [[-1.0, 1.0]]
+    samples_per_epoch: 1024 # 16384
     batch_size: 16
-    min_epsilon: 3
-    max_epsilon: 3
+    min_epsilon: 9.0
+    max_epsilon: 9.0
     min_log10_delta: -3
     max_log10_delta: -3
   valid:
-    _target_: dpconvcnp.data.gp.RandomScaleGPGenerator
-    seed: ${params.generator_valid_seed}
-    dim: ${params.dim}
-    kernel_type: eq
-    min_log10_lengthscale: -0.602
-    max_log10_lengthscale: -0.602
-    noise_std: 0.2
-    min_num_ctx: 1
-    max_num_ctx: 512
-    min_num_trg: 512
-    max_num_trg: 512
-    context_range: [[-2.0, 2.0]]
-    target_range: [[-6.0, 6.0]]
-    samples_per_epoch: 1024
+    _target_: dpconvcnp.data.property.PropertyPriceDataGenerator
+    seed: ${params.generator_train_seed}
     batch_size: 16
-    min_epsilon: 3
-    max_epsilon: 3
+    min_epsilon: 9.0
+    max_epsilon: 9.0
     min_log10_delta: -3
     max_log10_delta: -3
+    path_to_csv: /scratches/cblgpu07/em626/dpconvcnp/_data/processed/small.csv
+    num_ctx: 512
+    num_trg: 64
+    mode: valid
+    valid_fraction: 1.0
+    test_fraction: 0.0
+    property_types: ["T"]
+    lease_types: ["F", "L"]
+    age_types: ["Y", "N"]
+    min_coords: [-0.582550, 51.236282] # null # Set to [-0.582550, 51.236282] for London only
+    max_coords: [0.3210750, 51.740789] # null # Set to [0.3210750, 51.740789] for London only
     reset_seed_at_epoch_end: true
 
 model:
@@ -52,8 +52,8 @@ dpsetconv:
   seed: ${params.dpsetconv_seed}
   points_per_unit: ${params.points_per_unit}
   dim: ${params.dim}
-  margin: 2.5
-  lengthscale_init: 0.1
+  margin: 1.0
+  lengthscale_init: 0.2
   y_bound_init: 2.0
   w_noise_init: 0.5
   lengthscale_trainable: true
@@ -62,14 +62,16 @@ dpsetconv:
   amortize_y_bound: false
   amortize_w_noise: false
   num_mlp_hidden_units: 32
+  xmin: [-1.0, -1.0]
+  xmax: [ 1.0,  1.0]
 
 conv_net:
   _target_: dpconvcnp.model.conv.UNet
   first_channels: 32
   last_channels: 2
   kernel_size: 5
-  num_channels: [64, 64, 64, 64, 64, 64]
-  strides: [2, 2, 2, 2, 2, 2]
+  num_channels: [32, 32, 32, 32, 32]
+  strides: [2, 2, 2, 2, 2]
   dim: ${params.dim}
   seed: ${params.architecture_seed}
   activation: relu
@@ -86,8 +88,8 @@ optimizer:
   learning_rate: 5e-4
 
 params:
-  epochs: 200
-  dim: 1
+  epochs: 100
+  dim: 2
   points_per_unit: 32
   generator_train_seed: [0, 0]
   generator_valid_seed: [0, 10]
