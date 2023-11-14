@@ -59,6 +59,7 @@ def train_step(
             y_trg=y_trg,
             epsilon=epsilon,
             delta=delta,
+            training=True,
         )
         loss = tf.reduce_mean(loss) / cast(tf.shape(y_trg)[1], f32)
 
