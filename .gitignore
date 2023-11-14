@@ -164,3 +164,4 @@ cython_debug/
 .vscode
 _experiments
 _scratch
+notebooks
