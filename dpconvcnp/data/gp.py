@@ -9,7 +9,7 @@ import numpy as np
 from dpconvcnp.data.data import SyntheticGenerator, GroundTruthPredictor
 from dpconvcnp.random import randu, zero_mean_mvn
 from dpconvcnp.random import Seed
-from dpconvcnp.utils import f32, f64, to_tensor, cast
+from dpconvcnp.utils import i32, f32, f64, to_tensor, cast
 from dpconvcnp.model.privacy_accounting import (
     sens_per_sigma as dp_sens_per_sigma,
 )
@@ -259,36 +259,15 @@ class GPGroundTruthPredictor(GroundTruthPredictor):
 class GPWithPrivateOutputsNonprivateInputs:
     def __init__(
         self,
-        seed: Seed,
-        points_per_unit: int,
-        margin: float,
-        dpsetconv_lengthscale: float,
+        dpsetconv: DPSetConvEncoder,
         y_bound: Optional[float] = None,
         w_noise: Optional[float] = None,
-        dim: Optional[int] = None,
     ):
         y_bound = 2.0 if y_bound is None else y_bound
         w_noise = 0.5 if w_noise is None else w_noise
 
-        self.dpsetconv = DPSetConvEncoder(
-            seed=seed,
-            points_per_unit=points_per_unit,
-            lengthscale_init=dpsetconv_lengthscale,
-            y_bound_init=y_bound,
-            w_noise_init=w_noise,
-            margin=margin,
-            lengthscale_trainable=False,
-            y_bound_trainable=False,
-            w_noise_trainable=False,
-            amortize_y_bound=False,
-            amortize_w_noise=False,
-            num_mlp_hidden_units=None,
-            clip_y_ctx=False,
-            dim=dim,
-        )
-
+        self.dpsetconv = dpsetconv
         self.lengthscales = self.dpsetconv.lengthscales
-
 
     @tf.function(reduce_retracing=True)
     def __call__(
@@ -303,9 +282,19 @@ class GPWithPrivateOutputsNonprivateInputs:
         y_ctx: tf.Tensor,
         x_trg: tf.Tensor,
         y_trg: Optional[tf.Tensor] = None,
+        override_w_noise: bool = False,
     ) -> Tuple[tf.Tensor, tf.Tensor]:
         # Pass data through dpsetconv
-        seed, g, z = self.dpsetconv(seed, x_ctx, y_ctx, x_trg, epsilon, delta)
+        seed, g, z = self.dpsetconv(
+            seed,
+            x_ctx,
+            y_ctx,
+            x_trg,
+            epsilon,
+            delta,
+            clip_y_ctx=False,
+            override_w_noise=override_w_noise,
+        )
 
         # Flatten grids and keep only data channel from z
         g = cast(flatten_grid(g), f64)
@@ -320,12 +309,14 @@ class GPWithPrivateOutputsNonprivateInputs:
 
         # Get number of context points
         num_ctx = c.shape[1]
+        num_ctx_f32 = cast(to_tensor(num_ctx, i32), f32) * tf.ones(c.shape[0])
 
         # Compute DP noise for outputs
         sens_per_sigma = dp_sens_per_sigma(epsilon=epsilon, delta=delta)
         data_sigma = self.dpsetconv.data_sigma(
             sens_per_sigma=sens_per_sigma,
-            num_ctx=None,
+            num_ctx=num_ctx_f32,
+            override_w_noise=override_w_noise,
         )
         data_sigma = cast(data_sigma, f64)
 
