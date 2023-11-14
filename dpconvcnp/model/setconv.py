@@ -1,7 +1,6 @@
 from typing import Tuple, Optional, List
 
 import tensorflow as tf
-from check_shape import check_shape
 
 from dpconvcnp.random import zero_mean_mvn_on_grid_from_chol
 from dpconvcnp.random import Seed
@@ -34,7 +33,6 @@ class DPSetConvEncoder(tf.Module):
         xmin: Optional[List[float]] = None,
         xmax: Optional[List[float]] = None,
         dtype: tf.DType = tf.float32,
-        clip_y_ctx: bool = True,
         name="dp_set_conv",
         **kwargs,
     ):
@@ -92,7 +90,6 @@ class DPSetConvEncoder(tf.Module):
 
         self.xmin = to_tensor(xmin, dtype=dtype) if xmin is not None else None
         self.xmax = to_tensor(xmax, dtype=dtype) if xmax is not None else None
-        self.clip_y_ctx = clip_y_ctx
 
         self.n_norm_factor = n_norm_factor
 
@@ -101,7 +98,6 @@ class DPSetConvEncoder(tf.Module):
         sens_per_sigma: tf.Tensor,
         num_ctx: tf.Tensor,
     ) -> tf.Tensor:
-
         if self.amortize_y_bound:
             sens_num_ctx = tf.stack(
                 [sens_per_sigma, num_ctx / self.n_norm_factor],
@@ -151,9 +147,13 @@ class DPSetConvEncoder(tf.Module):
         self,
         sens_per_sigma: tf.Tensor,
         num_ctx: tf.Tensor,
+        override_w_noise: bool = False,
     ) -> tf.Tensor:
         y_bound = self.y_bound(sens_per_sigma=sens_per_sigma, num_ctx=num_ctx)
         w_noise = self.w_noise(sens_per_sigma=sens_per_sigma, num_ctx=num_ctx)
+
+        if override_w_noise:
+            w_noise = tf.ones_like(w_noise)
 
         return 2.0 * y_bound[:, 0] / (sens_per_sigma * w_noise[:, 0] ** 0.5)
 
@@ -174,12 +174,9 @@ class DPSetConvEncoder(tf.Module):
         x_trg: tf.Tensor,
         epsilon: tf.Tensor,
         delta: tf.Tensor,
+        clip_y_ctx: bool = True,
+        override_w_noise: bool = False,
     ) -> Tuple[Seed, tf.Tensor, tf.Tensor]:
-        # Check context shapes
-        check_shape(
-            [x_ctx, y_ctx, x_trg],
-            [("B", "C", "Dx"), ("B", "C", 1), ("B", "T", "Dx")],
-        )
         num_ctx = tf.reduce_sum(tf.ones_like(y_ctx[:, :, 0]), axis=1)
         num_ctx = cast(num_ctx, f32)
 
@@ -187,7 +184,7 @@ class DPSetConvEncoder(tf.Module):
         sens_per_sigma = dp_sens_per_sigma(epsilon=epsilon, delta=delta)
 
         # Clip context outputs and concatenate tensor of ones
-        if self.clip_y_ctx:
+        if clip_y_ctx:
             y_ctx = self.clip_y(
                 y_ctx=y_ctx,
                 sens_per_sigma=sens_per_sigma,
@@ -247,6 +244,7 @@ class DPSetConvEncoder(tf.Module):
             x_dimension_wise_grids=x_dimension_wise_grids,
             sens_per_sigma=sens_per_sigma,
             num_ctx=num_ctx,
+            override_w_noise=override_w_noise,
         )
 
         # Add noise to data and density channels
@@ -285,6 +283,7 @@ class DPSetConvEncoder(tf.Module):
         x_dimension_wise_grids: List[tf.Tensor],
         sens_per_sigma: tf.Tensor,
         num_ctx: tf.Tensor,
+        override_w_noise: bool = False,
     ) -> Tuple[Seed, tf.Tensor, tf.Tensor]:
         """Sample noise for the density and data channels, returning the new
         seed, the noise tensor and the noise standard deviation tensor.
@@ -339,7 +338,11 @@ class DPSetConvEncoder(tf.Module):
 
         # Compute and expand data_sigma and density_sigma for broadcasting
         data_sigma = expand_last_dims(
-            self.data_sigma(sens_per_sigma=sens_per_sigma, num_ctx=num_ctx),
+            self.data_sigma(
+                sens_per_sigma=sens_per_sigma,
+                num_ctx=num_ctx,
+                override_w_noise=override_w_noise,
+            ),
             ndims=len(tf.shape(data_noise)) - 1,
         )  # shape (batch_size, 1, ..., 1)
 
