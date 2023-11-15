@@ -80,17 +80,13 @@ class UNet(tf.Module):
             self.first = CONV[dim](**kw(first_channels, kernel_size, 1, seed))
             seed += 1
 
-            norm_axes = [i for i in range(1, dim + 2)]
-
             # Convolutional and batchnorm layers
             for i in range(len(num_channels)):
                 self.convs.append(
                     CONV[dim](**kw(num_channels[i], kernel_size, 2, seed))
                 )
                 seed += 1
-                self.down_norms.append(
-                    tfk.layers.LayerNormalization(axis=norm_axes)
-                )
+                self.down_norms.append(tfk.layers.BatchNormalization())
 
                 self.transposed_convs.append(
                     TRANSPOSE_CONV[dim](
@@ -98,9 +94,7 @@ class UNet(tf.Module):
                     )
                 )
                 seed += 1
-                self.up_norms.append(
-                    tfk.layers.LayerNormalization(axis=norm_axes)
-                )
+                self.up_norms.append(tfk.layers.BatchNormalization())
 
             # Last convolutional layer
             self.last = TRANSPOSE_CONV[dim](
@@ -114,7 +108,7 @@ class UNet(tf.Module):
         for conv, norm in zip(self.convs, self.down_norms):
             skips.append(z)
             z = conv(z)
-            z = norm(z)
+            # z = norm(z)
             z = tfk.activations.relu(z)
 
         for conv, norm, skip in zip(
@@ -124,7 +118,7 @@ class UNet(tf.Module):
         ):
             z = conv(z)
             z = tf.concat([z, skip], axis=-1)
-            z = norm(z)
+            # z = norm(z)
             z = tfk.activations.relu(z)
 
         z = self.last(z)
