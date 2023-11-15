@@ -62,8 +62,8 @@ class UNet(tf.Module):
         self.convs = []
         self.transposed_convs = []
 
-        self.down_batch_norms = []
-        self.up_batch_norms = []
+        self.down_norms = []
+        self.up_norms = []
 
         kw = lambda f, k, s, seed: {
             "filters": f,
@@ -77,10 +77,10 @@ class UNet(tf.Module):
 
         with self.name_scope:
             # First convolutional layer
-            self.first = CONV[dim](
-                **kw(first_channels, kernel_size, 1, seed)
-            )
+            self.first = CONV[dim](**kw(first_channels, kernel_size, 1, seed))
             seed += 1
+
+            norm_axes = [i for i in range(1, dim + 2)]
 
             # Convolutional and batchnorm layers
             for i in range(len(num_channels)):
@@ -88,7 +88,9 @@ class UNet(tf.Module):
                     CONV[dim](**kw(num_channels[i], kernel_size, 2, seed))
                 )
                 seed += 1
-                self.down_batch_norms.append(tfk.layers.BatchNormalization())
+                self.down_norms.append(
+                    tfk.layers.LayerNormalization(axis=norm_axes)
+                )
 
                 self.transposed_convs.append(
                     TRANSPOSE_CONV[dim](
@@ -96,7 +98,9 @@ class UNet(tf.Module):
                     )
                 )
                 seed += 1
-                self.up_batch_norms.append(tfk.layers.BatchNormalization())
+                self.up_norms.append(
+                    tfk.layers.LayerNormalization(axis=norm_axes)
+                )
 
             # Last convolutional layer
             self.last = TRANSPOSE_CONV[dim](
@@ -107,20 +111,20 @@ class UNet(tf.Module):
         z = self.first(z)
         skips = []
 
-        for conv, bn in zip(self.convs, self.down_batch_norms):
+        for conv, bn in zip(self.convs, self.down_norms):
             skips.append(z)
             z = conv(z)
-            z = bn(z, training=training)
+            z = bn(z)
             z = tfk.activations.relu(z)
 
         for conv, bn, skip in zip(
             self.transposed_convs,
-            self.up_batch_norms,
+            self.up_norms,
             skips[::-1],
         ):
             z = conv(z)
             z = tf.concat([z, skip], axis=-1)
-            z = bn(z, training=training)
+            z = bn(z)
             z = tfk.activations.relu(z)
 
         z = self.last(z)
