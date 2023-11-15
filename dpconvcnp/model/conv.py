@@ -111,20 +111,20 @@ class UNet(tf.Module):
         z = self.first(z)
         skips = []
 
-        for conv, bn in zip(self.convs, self.down_norms):
+        for conv, norm in zip(self.convs, self.down_norms):
             skips.append(z)
             z = conv(z)
-            z = bn(z)
+            z = norm(z)
             z = tfk.activations.relu(z)
 
-        for conv, bn, skip in zip(
+        for conv, norm, skip in zip(
             self.transposed_convs,
             self.up_norms,
             skips[::-1],
         ):
             z = conv(z)
             z = tf.concat([z, skip], axis=-1)
-            z = bn(z)
+            z = norm(z)
             z = tfk.activations.relu(z)
 
         z = self.last(z)
