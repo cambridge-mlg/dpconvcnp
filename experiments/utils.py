@@ -433,6 +433,7 @@ def initialize_evaluation(
     parser = argparse.ArgumentParser()
     parser.add_argument("--experiment_path", type=str)
     parser.add_argument("--evaluation_config", type=str)
+    parser.add_argument("--evaluation_dirname", type=str, default="eval")
     args, config_changes = parser.parse_known_args()
 
     experiment_path = (
@@ -483,6 +484,7 @@ def initialize_evaluation(
         list(evaluation.params.evaluation_seed),
         evaluation.generator,
         experiment_path,
+        args.evaluation_dirname,
         eval_name,
     )
 
