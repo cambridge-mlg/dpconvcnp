@@ -62,6 +62,8 @@ dpsetconv:
   amortize_y_bound: false
   amortize_w_noise: false
   num_mlp_hidden_units: 32
+  skip_density_noise: false
+  skip_clip: false
 
 conv_net:
   _target_: dpconvcnp.model.conv.UNet
