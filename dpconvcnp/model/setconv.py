@@ -43,8 +43,9 @@ class DPSetConvEncoder(tf.Module):
         assert (not skip_density_noise and not skip_clip) or (
             (not y_bound_trainable) and (not w_noise_trainable)
         ), (
-            "skip_density_noise can only be used when "
-            "y_bound and w_noise are not trainable."
+            f"skip_density_noise can only be used when "
+            f"y_bound and w_noise are not trainable, "
+            f"got {y_bound_trainable=} and {w_noise_trainable=}."
         )
 
         self.points_per_unit = points_per_unit
