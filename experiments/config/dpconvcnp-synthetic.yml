@@ -13,7 +13,7 @@ generators:
     max_num_trg: 512
     context_range: [[-2.0, 2.0]]
     target_range: [[-6.0, 6.0]]
-    samples_per_epoch: 16384
+    samples_per_epoch: 32768
     batch_size: 16
     min_epsilon: 3
     max_epsilon: 3
@@ -33,7 +33,7 @@ generators:
     max_num_trg: 512
     context_range: [[-2.0, 2.0]]
     target_range: [[-6.0, 6.0]]
-    samples_per_epoch: 1024
+    samples_per_epoch: 512
     batch_size: 16
     min_epsilon: 3
     max_epsilon: 3
@@ -87,7 +87,7 @@ optimizer:
   learning_rate: 5e-4
 
 params:
-  epochs: 1000
+  epochs: 500
   dim: 1
   points_per_unit: 32
   generator_train_seed: [0, 0]
