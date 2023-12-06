@@ -29,7 +29,6 @@ class UNetBlock(tf.Module):
         name="unet_block",
         **kwargs,
     ):
-
         assert dim in [
             1,
             2,
@@ -64,6 +63,7 @@ class UNetBlock(tf.Module):
                 use_bias=True,
                 kernel_initializer=tfk.initializers.GlorotUniform(seed=seed),
             )
+            self.norm_down = tfk.layers.BatchNormalization()
 
             up_channels = (
                 subnet_channels[0]
@@ -81,21 +81,31 @@ class UNetBlock(tf.Module):
                 use_bias=True,
                 kernel_initializer=tfk.initializers.GlorotUniform(seed=seed),
             )
+            self.norm_up = tfk.layers.BatchNormalization()
 
     def __call__(self, x: tf.Tensor, training: bool = False) -> tf.Tensor:
-
         skip = x
 
         # Apply down convolution
         if self.conv_down is not None:
-            x = tf.nn.relu(self.conv_down(x))
+            x = tf.nn.relu(
+                self.norm_down(
+                    self.conv_down(x),
+                    training=training,
+                )
+            )
 
         # Apply subnet recursively
         x = self.subnet(x)
 
         # Apply up convolution and concatenate with skip connection
         if self.conv_up is not None:
-            x = tf.nn.relu(self.conv_up(x))
+            x = tf.nn.relu(
+                self.norm_up(
+                    self.conv_up(x),
+                    training=training,
+                )
+            )
             x = tf.concat([x, skip], axis=-1)
 
         return x
@@ -152,7 +162,12 @@ class UNet(tf.Module):
         )
 
     def __call__(self, x: tf.Tensor, training: bool = False) -> tf.Tensor:
-        return self.last(self.unet(tf.nn.relu(self.first(x)), training=training))
+        return self.last(
+            self.unet(
+                tf.nn.relu(self.first(x)),
+                training=training,
+            )
+        )
 
 
 # Old UNet architecture
