@@ -51,7 +51,7 @@ class UNetBlock(tf.Module):
                 seed=seed,
             )
 
-            norm_axes = [i for i in range(1, dim + 1)]
+            self.norm_axes = [i for i in range(1, dim + 1)]
             seed = seed + 1
             self.conv_down = CONV[dim](
                 filters=subnet_channels[0],
@@ -62,7 +62,6 @@ class UNetBlock(tf.Module):
                 use_bias=True,
                 kernel_initializer=tfk.initializers.GlorotUniform(seed=seed),
             )
-            self.norm_down = tfk.layers.LayerNormalization(axis=norm_axes)
 
             up_channels = (
                 subnet_channels[0]
@@ -80,31 +79,27 @@ class UNetBlock(tf.Module):
                 use_bias=True,
                 kernel_initializer=tfk.initializers.GlorotUniform(seed=seed),
             )
-            self.norm_up = tfk.layers.LayerNormalization(axis=norm_axes)
+
+    def norm(self, x: tf.Tensor) -> tf.Tensor:
+        x = x - tf.reduce_mean(x, axis=self.norm_axes, keepdims=True)
+        x = x / (
+            tf.math.reduce_std(x, axis=self.norm_axes, keepdims=True) + 1e-6
+        )
+        return x
 
     def __call__(self, x: tf.Tensor, training: bool = False) -> tf.Tensor:
         skip = x
 
         # Apply down convolution
         if self.conv_down is not None:
-            x = tf.nn.relu(
-                self.norm_down(
-                    self.conv_down(x),
-                    training=training,
-                )
-            )
+            x = tf.nn.relu(self.norm_down(self.conv_down(x)))
 
         # Apply subnet recursively
         x = self.subnet(x)
 
         # Apply up convolution and concatenate with skip connection
         if self.conv_up is not None:
-            x = tf.nn.relu(
-                self.norm_up(
-                    self.conv_up(x),
-                    training=training,
-                )
-            )
+            x = tf.nn.relu(self.norm_up(self.conv_up(x)))
             x = tf.concat([x, skip], axis=-1)
 
         return x
