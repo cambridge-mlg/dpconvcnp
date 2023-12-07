@@ -92,14 +92,14 @@ class UNetBlock(tf.Module):
 
         # Apply down convolution
         if self.conv_down is not None:
-            x = tf.nn.relu(self.norm_down(self.conv_down(x)))
+            x = tf.nn.relu(self.norm(self.conv_down(x)))
 
         # Apply subnet recursively
         x = self.subnet(x)
 
         # Apply up convolution and concatenate with skip connection
         if self.conv_up is not None:
-            x = tf.nn.relu(self.norm_up(self.conv_up(x)))
+            x = tf.nn.relu(self.norm(self.conv_up(x)))
             x = tf.concat([x, skip], axis=-1)
 
         return x
