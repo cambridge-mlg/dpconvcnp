@@ -20,7 +20,6 @@ class UNetBlock(tf.Module):
     def __init__(
         self,
         *,
-        in_channels: int,
         subnet_channels: Tuple[int],
         stride: int,
         kernel_size: int,
@@ -45,7 +44,6 @@ class UNetBlock(tf.Module):
         else:
             seed = seed + 1
             self.subnet = UNetBlock(
-                in_channels=subnet_channels[0],
                 subnet_channels=subnet_channels[1:],
                 kernel_size=kernel_size,
                 stride=stride,
@@ -53,6 +51,7 @@ class UNetBlock(tf.Module):
                 seed=seed,
             )
 
+            norm_axes = [i for i in range(1, dim + 1)]
             seed = seed + 1
             self.conv_down = CONV[dim](
                 filters=subnet_channels[0],
@@ -63,7 +62,7 @@ class UNetBlock(tf.Module):
                 use_bias=True,
                 kernel_initializer=tfk.initializers.GlorotUniform(seed=seed),
             )
-            self.norm_down = tfk.layers.BatchNormalization()
+            self.norm_down = tfk.layers.LayerNormalization(axis=norm_axes)
 
             up_channels = (
                 subnet_channels[0]
@@ -81,7 +80,7 @@ class UNetBlock(tf.Module):
                 use_bias=True,
                 kernel_initializer=tfk.initializers.GlorotUniform(seed=seed),
             )
-            self.norm_up = tfk.layers.BatchNormalization()
+            self.norm_up = tfk.layers.LayerNormalization(axis=norm_axes)
 
     def __call__(self, x: tf.Tensor, training: bool = False) -> tf.Tensor:
         skip = x
@@ -153,7 +152,6 @@ class UNet(tf.Module):
 
         seed = seed + 1
         self.unet = UNetBlock(
-            in_channels=first_channels,
             subnet_channels=num_channels,
             kernel_size=kernel_size,
             stride=stride,
