@@ -13,6 +13,7 @@ Things to do:
     - ~~Repeat above experiment with amortisation over lengthscales~~
     - ~~Repeat above experiment with amortisation over epsilon~~
     - ~~Repeat above experiment with amortisation over lengthscales and epsilon~~
+- Remove layernorm
 - Create "gap plot" with three models:
     1. Data noise only
     2. Data noise and clipping
