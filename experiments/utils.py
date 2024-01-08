@@ -462,19 +462,13 @@ def initialize_evaluation(
     # Load model weights
     checkpointer.load_best_checkpoint(model=model)
 
-    eval_name = evaluation.params.eval_name
-    if eval_name is not None and not os.path.exists(
-        f"{experiment_path}/eval/{eval_name}"
-    ):
-        os.makedirs(f"{experiment_path}/eval/{eval_name}")
-
     return (
         model,
         list(evaluation.params.evaluation_seed),
         evaluation.generator,
         experiment_path,
         args.evaluation_dirname,
-        eval_name,
+        evaluation.params.eval_name,
     )
 
 

@@ -3,6 +3,7 @@ from plot import plot
 
 
 def main():
+    raise Exception
     (
         model,
         base_seed,
