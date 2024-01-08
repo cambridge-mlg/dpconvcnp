@@ -287,7 +287,6 @@ def evaluation_summary(
         {
             "loss": evaluation_result["loss"].numpy(),
             "gt_loss": evaluation_result["gt_loss"].numpy(),
-            "ideal_full_loss": evaluation_result["ideal_full_loss"].numpy(),
             "ideal_channel_loss": evaluation_result["ideal_channel_loss"].numpy(),
             "kl_diag": evaluation_result["kl_diag"].numpy(),
             "epsilon": evaluation_result["epsilon"].numpy(),
