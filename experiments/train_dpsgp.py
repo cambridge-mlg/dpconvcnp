@@ -13,7 +13,7 @@ torch.set_default_dtype(torch.float64)
 
 def main():
 
-    experiment, path, log_path, writer, checkpointer = initialize_experiment()
+    experiment, config, path, log_path, _, _ = initialize_experiment()
     tee_to_file(log_path)
 
     gen_train = experiment.generators.train
@@ -22,9 +22,7 @@ def main():
     xc, yc, epsilon, delta = [], [], [], []
     for batch in gen_train:
         xc.append(torch.as_tensor(batch.x_ctx[0, ...].numpy(), dtype=torch.float64))
-        yc.append(
-            torch.as_tensor(batch.y_ctx[0, ...].numpy(), dtype=torch.float64)
-        )
+        yc.append(torch.as_tensor(batch.y_ctx[0, ...].numpy(), dtype=torch.float64))
         epsilon.append(batch.epsilon[0].numpy())
         delta.append(batch.delta[0].numpy())
 
@@ -35,6 +33,16 @@ def main():
         study_name=study_name,
         storage=f"sqlite:///{study_name}.db",
         load_if_exists=True,
+    )
+
+    # Create wandb callback.
+    wandbc = optuna.integration.WeightsAndBiasesCallback(
+        metric_name="elbo",
+        wandb_kwargs={
+            "project": experiment.misc.project,
+            "name": experiment.misc.name,
+            "config": config,
+        },
     )
 
     sys.stdout.fileno = lambda: False
@@ -65,6 +73,7 @@ def main():
             experiment.limits.max_init_noise,
         ),
         n_trials=experiment.params.n_trials,
+        callbacks=[wandbc],
     )
 
 

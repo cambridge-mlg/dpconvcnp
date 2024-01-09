@@ -361,7 +361,9 @@ def gauss_gauss_kl_diag(
     return tfd.kl_divergence(dist_1, dist_2)
 
 
-def initialize_experiment() -> (Tuple[DictConfig, str, str, Writer, ModelCheckpointer]):
+def initialize_experiment() -> (
+    Tuple[DictConfig, DictConfig, str, str, Writer, ModelCheckpointer]
+):
     """Initialize experiment by parsing the config file, checking that the
     repo is clean, creating a path for the experiment, and creating a
     writer for tensorboard.
@@ -382,10 +384,10 @@ def initialize_experiment() -> (Tuple[DictConfig, str, str, Writer, ModelCheckpo
     repo = git.Repo(search_parent_directories=True)
 
     # Check that the repo is clean
-    assert args.debug or not repo.is_dirty(), "Repo is dirty, please commit changes."
-    assert args.debug or not has_commits_ahead(
-        repo
-    ), "Repo has commits ahead, please push changes."
+    # assert args.debug or not repo.is_dirty(), "Repo is dirty, please commit changes."
+    # assert args.debug or not has_commits_ahead(
+    #     repo
+    # ), "Repo has commits ahead, please push changes."
 
     # Initialize experiment, make path and writer
     OmegaConf.register_new_resolver("eval", eval)
@@ -410,7 +412,7 @@ def initialize_experiment() -> (Tuple[DictConfig, str, str, Writer, ModelCheckpo
     # Create model checkpointer
     model_checkpointer = ModelCheckpointer(path=f"{path}/checkpoints")
 
-    return experiment, path, log_path, writer, model_checkpointer
+    return experiment, config, path, log_path, writer, model_checkpointer
 
 
 def initialize_evaluation(
