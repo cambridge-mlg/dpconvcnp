@@ -10,7 +10,6 @@ tfd = tfp.distributions
 
 
 class DPConvCNP(tf.keras.Model):
-
     def __init__(
         self,
         conv_net: tf.Module,
@@ -24,7 +23,6 @@ class DPConvCNP(tf.keras.Model):
         self.dpsetconv_encoder = dpsetconv_encoder
         self.setconv_decoder = setconv_decoder
         self.conv_net = conv_net
-        
 
     def __call__(
         self,
@@ -35,7 +33,6 @@ class DPConvCNP(tf.keras.Model):
         epsilon: tf.Tensor,
         delta: tf.Tensor,
     ) -> Tuple[Seed, tf.Tensor, tf.Tensor]:
-        
         seed, x_grid, z_grid = self.dpsetconv_encoder(
             seed=seed,
             x_ctx=x_ctx,
@@ -54,12 +51,11 @@ class DPConvCNP(tf.keras.Model):
         )
 
         mean = z_trg[..., :1]
-        std = tf.math.softplus(z_trg[..., 1:])**0.5
+        std = tf.math.softplus(z_trg[..., 1:]) ** 0.5
 
         return seed, mean, std
 
-
-    @tf.function(reduce_retracing=True) 
+    @tf.function(reduce_retracing=True)
     def loss(
         self,
         seed: Seed,
@@ -70,7 +66,6 @@ class DPConvCNP(tf.keras.Model):
         epsilon: tf.Tensor,
         delta: tf.Tensor,
     ) -> Tuple[Seed, tf.Tensor, tf.Tensor, tf.Tensor]:
-
         seed, mean, std = self.__call__(
             seed=seed,
             x_ctx=x_ctx,
@@ -81,6 +76,6 @@ class DPConvCNP(tf.keras.Model):
         )
 
         log_prob = tfd.Normal(loc=mean, scale=std).log_prob(y_trg)
-        loss = - tf.reduce_sum(log_prob, axis=[1, 2])
+        loss = -tf.reduce_sum(log_prob, axis=[1, 2])
 
         return seed, loss, mean, std

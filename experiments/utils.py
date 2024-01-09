@@ -18,6 +18,8 @@ import pandas as pd
 
 from dpconvcnp.random import Seed
 from dpconvcnp.data.data import DataGenerator, Batch
+from dpconvcnp.data.gp import GPWithPrivateOutputsNonprivateInputs
+from dpconvcnp.utils import cast, f32
 
 tfd = tfp.distributions
 
@@ -58,7 +60,7 @@ def train_step(
             epsilon=epsilon,
             delta=delta,
         )
-        loss = tf.reduce_mean(loss) / y_trg.shape[1]
+        loss = tf.reduce_mean(loss) / cast(tf.shape(y_trg)[1], f32)
 
     gradients = tape.gradient(loss, model.trainable_variables)
     optimizer.apply_gradients(zip(gradients, model.trainable_variables))
@@ -90,13 +92,20 @@ def train_epoch(
         )
 
         writer.add_scalar("train/loss", loss, step)
-        # writer.add_scalar("lengthscale", model.dpsetconv_encoder.lengthscale, step)
 
         if not model.dpsetconv_encoder.amortize_y_bound:
-            writer.add_scalar("y_bound", model.dpsetconv_encoder.y_bound(None)[0], step)
+            writer.add_scalar(
+                "y_bound",
+                model.dpsetconv_encoder.y_bound(None, None)[0, 0],
+                step,
+            )
 
         if not model.dpsetconv_encoder.amortize_w_noise:
-            writer.add_scalar("w_noise", model.dpsetconv_encoder.w_noise(None)[0], step)
+            writer.add_scalar(
+                "w_noise",
+                model.dpsetconv_encoder.w_noise(None, None)[0, 0],
+                step,
+            )
 
         epoch.set_postfix(loss=f"{loss:.4f}")
 
@@ -111,6 +120,7 @@ def valid_epoch(
     generator: DataGenerator,
     epoch: Optional[int] = None,
     writer: Optional[Writer] = None,
+    fast_validation: bool = False,
 ) -> Tuple[Seed, Dict[str, tf.Tensor], List[Batch]]:
     result = {
         "kl_diag": [],
@@ -120,9 +130,19 @@ def valid_epoch(
         "gt_mean": [],
         "gt_std": [],
         "gt_loss": [],
+        "ideal_full_mean": [],
+        "ideal_full_std": [],
+        "ideal_full_loss": [],
+        "ideal_channel_mean": [],
+        "ideal_channel_std": [],
+        "ideal_channel_loss": [],
     }
 
     batches = []
+
+    idealised_predictor = GPWithPrivateOutputsNonprivateInputs(
+        dpsetconv=model.dpsetconv_encoder,
+    )
 
     for batch in tqdm(generator, total=generator.num_batches, desc="Validation"):
         seed, loss, mean, std = model.loss(
@@ -135,35 +155,65 @@ def valid_epoch(
             delta=batch.delta,
         )
 
-        gt_mean, gt_std, gt_log_lik = batch.gt_pred(
-            x_ctx=batch.x_ctx,
-            y_ctx=batch.y_ctx,
-            x_trg=batch.x_trg,
-            y_trg=batch.y_trg,
-        )
-
         loss = loss / batch.y_trg.shape[1]
-        gt_loss = -gt_log_lik / batch.y_trg.shape[1]
 
         result["loss"].append(loss)
         result["pred_mean"].append(mean[:, :, 0])
         result["pred_std"].append(std[:, :, 0])
 
-        result["gt_mean"].append(gt_mean[:, :, 0])
-        result["gt_std"].append(gt_std[:, :, 0])
-        result["gt_loss"].append(gt_loss)
-
-        result["kl_diag"].append(
-            tf.reduce_mean(
-                gauss_gauss_kl_diag(
-                    mean_1=gt_mean,
-                    std_1=gt_std,
-                    mean_2=mean,
-                    std_2=std,
-                ),
-                axis=[1, 2],
+        if batch.gt_pred is not None:
+            gt_mean, gt_std, gt_log_lik = batch.gt_pred(
+                x_ctx=batch.x_ctx,
+                y_ctx=batch.y_ctx,
+                x_trg=batch.x_trg,
+                y_trg=batch.y_trg,
             )
-        )
+            gt_loss = -gt_log_lik / batch.y_trg.shape[1]
+
+            result["gt_mean"].append(gt_mean[:, :, 0])
+            result["gt_std"].append(gt_std[:, :, 0])
+            result["gt_loss"].append(gt_loss)
+
+            result["kl_diag"].append(
+                tf.reduce_mean(
+                    gauss_gauss_kl_diag(
+                        mean_1=gt_mean,
+                        std_1=gt_std,
+                        mean_2=mean,
+                        std_2=std,
+                    ),
+                    axis=[1, 2],
+                )
+            )
+
+            if not fast_validation:
+                for override in [True, False]:
+                    prefix = "ideal_full" if override else "ideal_channel"
+
+                    (
+                        seed,
+                        _,
+                        ideal_mean,
+                        ideal_std,
+                        ideal_log_lik,
+                    ) = idealised_predictor(
+                        seed=seed,
+                        x_ctx=batch.x_ctx,
+                        y_ctx=batch.y_ctx,
+                        x_trg=batch.x_trg,
+                        y_trg=batch.y_trg,
+                        epsilon=batch.epsilon,
+                        delta=batch.delta,
+                        gen_kernel=batch.gt_pred.kernel,
+                        gen_kernel_noiseless=batch.gt_pred.kernel_noiseless,
+                        gen_noise_std=batch.gt_pred.noise_std,
+                        override_w_noise=override,
+                    )
+                    ideal_loss = -ideal_log_lik / batch.y_trg.shape[1]
+
+                    result[f"{prefix}_mean"].append(ideal_mean[:, :, 0])
+                    result[f"{prefix}_std"].append(ideal_std)
+                    result[f"{prefix}_loss"].append(ideal_loss)
 
         batches.append(batch)
 
@@ -172,8 +222,25 @@ def valid_epoch(
     result["mean_kl_diag"] = tf.reduce_mean(result["kl_diag"])
 
     result["loss"] = tf.concat(result["loss"], axis=0)
-    result["kl_diag"] = tf.concat(result["kl_diag"], axis=0)
-    result["gt_loss"] = tf.concat(result["gt_loss"], axis=0)
+
+    if len(result["gt_loss"]) > 0:
+        result["kl_diag"] = tf.concat(result["kl_diag"], axis=0)
+
+    if len(result["gt_loss"]) > 0:
+        result["gt_loss"] = tf.concat(result["gt_loss"], axis=0)
+        result["mean_gt_loss"] = tf.reduce_mean(result["gt_loss"])
+
+    for override in [True, False]:
+        prefix = "ideal_full" if override else "ideal_channel"
+
+        if len(result[f"{prefix}_loss"]) > 0:
+            result[f"{prefix}_loss"] = tf.concat(
+                result[f"{prefix}_loss"],
+                axis=0,
+            )
+            result[f"mean_{prefix}_loss"] = tf.reduce_mean(
+                result[f"{prefix}_loss"],
+            )
 
     result["epsilon"] = tf.concat([b.epsilon for b in batches], axis=0)
     result["delta"] = tf.concat([b.delta for b in batches], axis=0)
@@ -181,6 +248,23 @@ def valid_epoch(
     if writer is not None:
         writer.add_scalar("val/loss", result["mean_loss"], epoch)
         writer.add_scalar("val/kl_diag", result["mean_kl_diag"], epoch)
+
+        if len(result["gt_loss"]) > 0:
+            writer.add_scalar(
+                "val/gt_loss",
+                result["mean_gt_loss"],
+                epoch,
+            )
+
+        for override in [True, False]:
+            prefix = "ideal_full" if override else "ideal_channel"
+
+            if len(result[f"{prefix}_loss"]) > 0:
+                writer.add_scalar(
+                    f"val/{prefix}_loss",
+                    result[f"mean_{prefix}_loss"],
+                    epoch,
+                )
 
     return seed, result, batches
 
@@ -190,20 +274,13 @@ def evaluation_summary(
     evaluation_result: Dict[str, tf.Tensor],
     batches: List[Batch],
 ):
-    # Get batch information
-    batch_info = [
-        get_batch_info(batch, idx)
-        for batch in batches
-        for idx in range(len(batch.x_ctx))
-    ]
-
     num_ctx = np.array(
         [batch.x_ctx.shape[1] for batch in batches for _ in range(len(batch.x_ctx))]
     )
 
     lengthscale = np.array(
         [
-            batch.gt_pred.kernel.lengthscales.numpy()
+            batch.gt_pred.kernel.kernels[0].lengthscales.numpy()
             for batch in batches
             for _ in range(len(batch.x_ctx))
         ]
@@ -214,6 +291,8 @@ def evaluation_summary(
         {
             "loss": evaluation_result["loss"].numpy(),
             "gt_loss": evaluation_result["gt_loss"].numpy(),
+            "ideal_full_loss": evaluation_result["ideal_full_loss"].numpy(),
+            "ideal_channel_loss": evaluation_result["ideal_channel_loss"].numpy(),
             "kl_diag": evaluation_result["kl_diag"].numpy(),
             "epsilon": evaluation_result["epsilon"].numpy(),
             "delta": evaluation_result["delta"].numpy(),
@@ -334,41 +413,44 @@ def initialize_experiment() -> (Tuple[DictConfig, str, str, Writer, ModelCheckpo
     return experiment, path, log_path, writer, model_checkpointer
 
 
-def initialize_evaluation():
+def initialize_evaluation(
+    experiment_path: str = None,
+    evaluation_config: str = None,
+    **evaluation_config_changes,
+):
     # Make argument parser with just the config argument
     parser = argparse.ArgumentParser()
     parser.add_argument("--experiment_path", type=str)
     parser.add_argument("--evaluation_config", type=str)
-    parser.add_argument("--debug", action="store_true")
     args, config_changes = parser.parse_known_args()
 
-    ## Create a repo object and check if local repo is clean
-    # repo = git.Repo(search_parent_directories=True)
+    experiment_path = (
+        args.experiment_path if experiment_path is None else experiment_path
+    )
 
-    ## Check that the repo is clean
-    # assert (
-    #    args.debug or not repo.is_dirty()
-    # ), "Repo is dirty, please commit changes."
-    # assert args.debug or not has_commits_ahead(
-    #    repo
-    # ), "Repo has commits ahead, please push changes."
+    evaluation_config = (
+        args.evaluation_config if evaluation_config is None else evaluation_config
+    )
 
     # Initialize experiment, make path and writer
-    OmegaConf.register_new_resolver("eval", eval)
-    experiment_config = OmegaConf.load(f"{args.experiment_path}/config.yml")
+    try:
+        OmegaConf.register_new_resolver("eval", eval)
+
+    except ValueError:
+        pass
+
+    experiment_config = OmegaConf.load(f"{experiment_path}/config.yml")
     evaluation_config = OmegaConf.merge(
-        OmegaConf.load(args.evaluation_config),
+        OmegaConf.load(evaluation_config),
         OmegaConf.from_cli(config_changes),
+        evaluation_config_changes,
     )
     experiment = instantiate(experiment_config)
     evaluation = instantiate(evaluation_config)
 
-    ## Check out commit hash -- only the model is loaded using this hash
-    # repo.git.checkout(f"{experiment_config.commit}", "dpconvcnp")
-
     # Create model checkpointer and load model
     checkpointer = ModelCheckpointer(
-        path=f"{args.experiment_path}/checkpoints",
+        path=f"{experiment_path}/checkpoints",
     )
 
     # Set model
@@ -377,11 +459,10 @@ def initialize_evaluation():
     # Load model weights
     checkpointer.load_best_checkpoint(model=model)
 
-    experiment_path = args.experiment_path
     eval_name = evaluation.params.eval_name
-
-    assert evaluation.params.eval_name is not None
-    if not os.path.exists(f"{experiment_path}/eval/{eval_name}"):
+    if eval_name is not None and not os.path.exists(
+        f"{experiment_path}/eval/{eval_name}"
+    ):
         os.makedirs(f"{experiment_path}/eval/{eval_name}")
 
     return (
@@ -451,7 +532,8 @@ def make_experiment_path(experiment: DictConfig) -> str:
         os.makedirs(path)
 
     else:
-        raise ValueError(f"Path {path} already exists.")
+        print("Path for experiment results already exists! Exiting.")
+        quit()
 
     return path
 
@@ -480,7 +562,7 @@ def get_batch_info(batch: Batch, idx: int) -> tf.Tensor:
     n = batch.x_ctx.shape[1]
     epsilon = batch.epsilon[idx].numpy()
     delta = batch.delta[idx].numpy()
-    lengthscale = batch.gt_pred.kernel.lengthscales.numpy()
+    lengthscale = batch.gt_pred.kernel.kernels[0].lengthscales.numpy()
 
     info = {
         "n": n,

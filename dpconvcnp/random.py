@@ -27,6 +27,9 @@ def randint(
         rand: Random integers in the range `[minval, maxval]`.
     """
 
+    minval = tf.cast(minval, tf.int32) if type(minval) == int else minval
+    maxval = tf.cast(maxval, tf.int32) if type(maxval) == int else maxval
+
     assert (
         minval.dtype == maxval.dtype
     ), "minval and maxval must have the same dtype"
