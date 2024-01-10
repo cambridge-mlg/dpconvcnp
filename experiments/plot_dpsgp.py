@@ -14,6 +14,7 @@ from dpconvcnp.data.data import Batch
 from dpconvcnp.utils import to_tensor, f32
 from utils import get_batch_info
 import dpsgp
+import wandb
 
 tfd = tfp.distributions
 
@@ -22,7 +23,6 @@ matplotlib.rcParams["font.family"] = "STIXGeneral"
 
 
 def plot(
-    path: str,
     model: Union[tf.Module, None],
     seed: Seed,
     batches: List[Batch],
@@ -33,12 +33,10 @@ def plot(
     y_lim: Tuple[float, float] = (-3.0, 3.0),
     points_per_dim: int = 512,
     params: Optional[Namespace] = None,
+    name: str = "plot",
 ):
     # Get dimension of input data
     dim = batches[0].x_ctx.shape[-1]
-
-    # If path for figures does not exist, create it
-    os.makedirs(f"{path}/fig", exist_ok=True)
 
     if dim == 1:
         x_plot = np.linspace(x_range[0], x_range[1], points_per_dim)[None, :, None]
@@ -136,7 +134,7 @@ def plot(
             gt_nll = tf.reduce_mean(-gt_log_prob) / batches[i].y_trg.shape[1]
 
             # Make figure for plotting
-            plt.figure(figsize=figsize)
+            fig = plt.figure(figsize=figsize)
 
             # Plot context and target points
             plt.scatter(
@@ -215,8 +213,11 @@ def plot(
             plt.yticks(fontsize=18)
 
             plt.legend(loc="upper right", fontsize=14)
-            plt.savefig(f"{path}/fig/epoch-{epoch:04d}-{i:03d}.png")
-            plt.close()
+
+            if wandb.run is not None:
+                wandb.log({f"fig/{name}": wandb.Image(fig)})
+            else:
+                plt.show()
 
     else:
         raise NotImplementedError
