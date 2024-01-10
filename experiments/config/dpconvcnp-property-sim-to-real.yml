@@ -74,7 +74,6 @@ conv_net:
   strides: [2, 2, 2, 2, 2]
   dim: ${params.dim}
   seed: ${params.architecture_seed}
-  activation: relu
 
 setconv:
   _target_: dpconvcnp.model.setconv.SetConvDecoder

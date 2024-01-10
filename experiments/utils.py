@@ -59,6 +59,7 @@ def train_step(
             y_trg=y_trg,
             epsilon=epsilon,
             delta=delta,
+            training=True,
         )
         loss = tf.reduce_mean(loss) / cast(tf.shape(y_trg)[1], f32)
 
@@ -130,9 +131,6 @@ def valid_epoch(
         "gt_mean": [],
         "gt_std": [],
         "gt_loss": [],
-        "ideal_full_mean": [],
-        "ideal_full_std": [],
-        "ideal_full_loss": [],
         "ideal_channel_mean": [],
         "ideal_channel_std": [],
         "ideal_channel_loss": [],
@@ -189,33 +187,31 @@ def valid_epoch(
             )
 
             if not fast_validation:
-                for override in [True, False]:
-                    prefix = "ideal_full" if override else "ideal_channel"
 
-                    (
-                        seed,
-                        _,
-                        ideal_mean,
-                        ideal_std,
-                        ideal_log_lik,
-                    ) = idealised_predictor(
-                        seed=seed,
-                        x_ctx=batch.x_ctx,
-                        y_ctx=batch.y_ctx,
-                        x_trg=batch.x_trg,
-                        y_trg=batch.y_trg,
-                        epsilon=batch.epsilon,
-                        delta=batch.delta,
-                        gen_kernel=batch.gt_pred.kernel,
-                        gen_kernel_noiseless=batch.gt_pred.kernel_noiseless,
-                        gen_noise_std=batch.gt_pred.noise_std,
-                        override_w_noise=override,
-                    )
-                    ideal_loss = -ideal_log_lik / batch.y_trg.shape[1]
+                (
+                    seed,
+                    _,
+                    ideal_mean,
+                    ideal_std,
+                    ideal_log_lik,
+                ) = idealised_predictor(
+                    seed=seed,
+                    x_ctx=batch.x_ctx,
+                    y_ctx=batch.y_ctx,
+                    x_trg=batch.x_trg,
+                    y_trg=batch.y_trg,
+                    epsilon=batch.epsilon,
+                    delta=batch.delta,
+                    gen_kernel=batch.gt_pred.kernel,
+                    gen_kernel_noiseless=batch.gt_pred.kernel_noiseless,
+                    gen_noise_std=batch.gt_pred.noise_std,
+                    override_w_noise=False,
+                )
+                ideal_loss = -ideal_log_lik / batch.y_trg.shape[1]
 
-                    result[f"{prefix}_mean"].append(ideal_mean[:, :, 0])
-                    result[f"{prefix}_std"].append(ideal_std)
-                    result[f"{prefix}_loss"].append(ideal_loss)
+                result[f"ideal_channel_mean"].append(ideal_mean[:, :, 0])
+                result[f"ideal_channel_std"].append(ideal_std)
+                result[f"ideal_channel_loss"].append(ideal_loss)
 
         batches.append(batch)
 
@@ -232,17 +228,14 @@ def valid_epoch(
         result["gt_loss"] = tf.concat(result["gt_loss"], axis=0)
         result["mean_gt_loss"] = tf.reduce_mean(result["gt_loss"])
 
-    for override in [True, False]:
-        prefix = "ideal_full" if override else "ideal_channel"
-
-        if len(result[f"{prefix}_loss"]) > 0:
-            result[f"{prefix}_loss"] = tf.concat(
-                result[f"{prefix}_loss"],
-                axis=0,
-            )
-            result[f"mean_{prefix}_loss"] = tf.reduce_mean(
-                result[f"{prefix}_loss"],
-            )
+    if len(result[f"ideal_channel_loss"]) > 0:
+        result[f"ideal_channel_loss"] = tf.concat(
+            result[f"ideal_channel_loss"],
+            axis=0,
+        )
+        result[f"mean_ideal_channel_loss"] = tf.reduce_mean(
+            result[f"ideal_channel_loss"],
+        )
         
     result["epsilon"] = tf.concat([b.epsilon for b in batches], axis=0)
     result["delta"] = tf.concat([b.delta for b in batches], axis=0)
@@ -258,15 +251,12 @@ def valid_epoch(
                 epoch,
             )
 
-        for override in [True, False]:
-            prefix = "ideal_full" if override else "ideal_channel"
-
-            if len(result[f"{prefix}_loss"]) > 0:
-                writer.add_scalar(
-                    f"val/{prefix}_loss",
-                    result[f"mean_{prefix}_loss"],
-                    epoch,
-                )
+        if len(result[f"ideal_channel_loss"]) > 0:
+            writer.add_scalar(
+                f"val/ideal_channel_loss",
+                result[f"mean_ideal_channel_loss"],
+                epoch,
+            )
 
     return seed, result, batches
 
@@ -297,7 +287,6 @@ def evaluation_summary(
         {
             "loss": evaluation_result["loss"].numpy(),
             "gt_loss": evaluation_result["gt_loss"].numpy(),
-            "ideal_full_loss": evaluation_result["ideal_full_loss"].numpy(),
             "ideal_channel_loss": evaluation_result["ideal_channel_loss"].numpy(),
             "kl_diag": evaluation_result["kl_diag"].numpy(),
             "epsilon": evaluation_result["epsilon"].numpy(),
@@ -432,6 +421,7 @@ def initialize_evaluation(
     parser = argparse.ArgumentParser()
     parser.add_argument("--experiment_path", type=str)
     parser.add_argument("--evaluation_config", type=str)
+    parser.add_argument("--evaluation_dirname", type=str, default="eval")
     args, config_changes = parser.parse_known_args()
 
     experiment_path = (
@@ -471,18 +461,13 @@ def initialize_evaluation(
     # Load model weights
     checkpointer.load_best_checkpoint(model=model)
 
-    eval_name = evaluation.params.eval_name
-    if eval_name is not None and not os.path.exists(
-        f"{experiment_path}/eval/{eval_name}"
-    ):
-        os.makedirs(f"{experiment_path}/eval/{eval_name}")
-
     return (
         model,
         list(evaluation.params.evaluation_seed),
         evaluation.generator,
         experiment_path,
-        eval_name,
+        args.evaluation_dirname,
+        evaluation.params.eval_name,
     )
 
 
