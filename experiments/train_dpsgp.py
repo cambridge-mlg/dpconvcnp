@@ -7,12 +7,12 @@ import torch
 import optuna
 import dpsgp
 import ray
+import wandb
 
 torch.set_default_dtype(torch.float64)
 
 
 def main():
-
     experiment, config, path, log_path, _, _ = initialize_experiment()
     tee_to_file(log_path)
 
@@ -75,6 +75,10 @@ def main():
         n_trials=experiment.params.n_trials,
         callbacks=[wandbc],
     )
+
+    # Save best parameters.
+    wandb.run.summary["best_params"] = study.best_params
+    wandb.run.summary["best_value"] = study.best_value
 
 
 if __name__ == "__main__":
