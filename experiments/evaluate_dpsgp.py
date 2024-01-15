@@ -76,7 +76,6 @@ def dp_train_model(batch: Batch, params: argparse.Namespace):
 
 
 def validate_dpsgp(generator, params: argparse.Namespace):
-    batches = []
     batch_results = []
     for batch in tqdm(generator, total=generator.num_batches, desc="Validation"):
         batch_results.append(dp_train_model.remote(batch, params))
@@ -87,48 +86,12 @@ def validate_dpsgp(generator, params: argparse.Namespace):
         k: [batch_result[k] for batch_result in batch_results]
         for k in batch_results[0].keys()
     }
-    for k in ["elbo", "nll", "exp_ll", "kl"]:
+    for k in ["elbo", "nll", "exp_ll", "kl", "rmse"]:
         result[k] = torch.stack(result[k])
-        result[f"mean_{k}"] = result[k].mean()
-        result[f"std_{k}"] = result[k].std()
 
-    result["rmse"] = torch.stack(result["rmse"])
     result["gt_loss"] = tf.concat(result["gt_loss"], axis=0)
-    result["epsilon"] = tf.concat([b.epsilon for b in batches], axis=0)
-    result["delta"] = tf.concat([b.delta for b in batches], axis=0)
 
-    return result, batches
-
-
-def evaluation_summary(
-    path: str,
-    evaluation_result: Dict[str, tf.Tensor],
-    batches: List[Batch],
-):
-    num_ctx = np.array(
-        [batch.x_ctx.shape[1] for batch in batches for _ in range(len(batch.x_ctx))]
-    )
-
-    lengthscale = np.array(
-        [
-            batch.gt_pred.kernel.lengthscales.numpy()
-            for batch in batches
-            for _ in range(len(batch.x_ctx))
-        ]
-    )
-
-    df_dict = {
-        k: evaluation_result[k].numpy()
-        for k in ["elbo", "gt_loss", "nll", "exp_ll", "kl", "epsilon", "delta", "rmse"]
-    }
-    df_dict["n"] = num_ctx
-    df_dict["lengthscale"] = lengthscale
-
-    # Make dataframe
-    df = pd.DataFrame(df_dict)
-
-    # Save dataframe
-    df.to_csv(f"{path}/metrics.csv", index=False)
+    return result
 
 
 def main():
@@ -186,18 +149,19 @@ def main():
         name=f"eval/{evaluation.params.eval_name}",
     )
 
-    result, batches = validate_dpsgp(generator, params)
-
+    result = validate_dpsgp(generator, params)
     result = {
-        k: result[k].numpy()
-        for k in ["elbo", "gt_loss", "nll", "exp_ll", "kl", "epsilon", "delta", "rmse"]
+        k: result[k].numpy() for k in ["elbo", "gt_loss", "nll", "exp_ll", "kl", "rmse"]
     }
-    result["num_ctx"] = args.num_ctx
-    result["lengthscale"] = args.lengthscale
 
     # Log summary of evaluation.
-    for k, v in result.items():
-        wandb.run.summary[f"eval/{evaluation.params.eval_name}/{k}"] = v
+    for k in result.keys():
+        wandb.run.summary[f"eval/{evaluation.params.eval_name}/mean_{k}"] = result[
+            k
+        ].mean()
+        wandb.run.summary[f"eval/{evaluation.params.eval_name}/std_{k}"] = result[
+            k
+        ].std()
 
 
 if __name__ == "__main__":
