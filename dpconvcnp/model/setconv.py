@@ -328,7 +328,7 @@ class DPSetConvEncoder(tf.Module):
 
         kxx_chol_dimension_wise = [
             tf.linalg.cholesky(
-                kxx + 1e-6 * tf.eye(tf.shape(kxx)[-1], dtype=kxx.dtype)
+                kxx + 1e-5 * tf.eye(tf.shape(kxx)[-1], dtype=kxx.dtype)
             )
             for kxx in kxx_dimension_wise
         ]
