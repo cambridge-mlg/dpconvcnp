@@ -217,7 +217,7 @@ def valid_epoch(
 
     result["mean_loss"] = tf.reduce_mean(result["loss"])
     result["stderr_loss"] = (
-        tf.math.reduce_std(result["loss"]) / tf.sqrt(len(result["loss"]))
+        tf.math.reduce_std(result["loss"]) / len(result["loss"]) ** 0.5
     )
     result["mean_kl_diag"] = tf.reduce_mean(result["kl_diag"])
 
