@@ -459,7 +459,8 @@ def initialize_evaluation(
     model = experiment.model
 
     # Load model weights
-    checkpointer.load_best_checkpoint(model=model)
+    #checkpointer.load_best_checkpoint(model=model)
+    checkpointer.load_last_checkpoint(model=model)
 
     return (
         model,
