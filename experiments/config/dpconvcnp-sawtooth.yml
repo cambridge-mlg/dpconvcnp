@@ -12,7 +12,7 @@ generators:
     target_range: [[-6.0, 6.0]]
     min_frequency: 0.5
     max_frequency: 1.5
-    samples_per_epoch: 32768
+    samples_per_epoch: 16 # 32768
     batch_size: 16
     min_epsilon: 3
     max_epsilon: 3

@@ -1,5 +1,5 @@
 from abc import abstractmethod, ABC
-from typing import List, Tuple, Callable
+from typing import List, Tuple, Callable, Optional
 
 import tensorflow as tf
 import tensorflow_probability as tfp
@@ -97,10 +97,20 @@ class SawtoothGenerator(SyntheticGenerator, ABC):
             stddev=self.noise_std*tf.ones((B, N, 1), dtype=x.dtype),
         )
 
-        def gt_pred(x_pred):
-            mean = _sawtooth(d, x_pred, phi, freq)[:, :, 0]
+        def gt_pred(
+                x_ctx: tf.Tensor,
+                y_ctx: tf.Tensor,
+                x_trg: tf.Tensor,
+                y_trg: Optional[tf.Tensor] = None,
+                **kwargs,
+            ):
+            mean = _sawtooth(d, x_trg, phi, freq)
             std = self.noise_std*tf.ones_like(mean)
-            return mean, std
+            loglik = tf.reduce_mean(
+                tfd.Normal(mean, std).log_prob(y_trg),
+                axis=[1, 2],
+            ) if y_trg is not None else None
+            return mean, std, loglik
 
         # Sawtooth is 2*((d.T x + phi) % (1 / freq) - 0.5)
         y = _sawtooth(d, x, phi, freq) + noise

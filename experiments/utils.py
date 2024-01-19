@@ -186,7 +186,10 @@ def valid_epoch(
                 )
             )
 
-            if not fast_validation:
+            if (
+                not fast_validation and
+                type(batch.gt_pred) == GPWithPrivateOutputsNonprivateInputs
+            ):
 
                 (
                     seed,
