@@ -19,7 +19,7 @@ generators:
     min_log10_delta: -3
     max_log10_delta: -3
   valid:
-    _target_: dpconvcnp.data.gp.RandomScaleGPGenerator
+    _target_: dpconvcnp.data.sawtooth.SawtoothGenerator
     seed: ${params.generator_valid_seed}
     dim: ${params.dim}
     noise_std: 0.2
