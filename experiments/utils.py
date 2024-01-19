@@ -18,7 +18,10 @@ import pandas as pd
 
 from dpconvcnp.random import Seed
 from dpconvcnp.data.data import DataGenerator, Batch
-from dpconvcnp.data.gp import GPWithPrivateOutputsNonprivateInputs
+from dpconvcnp.data.gp import (
+    GPGroundTruthPredictor,
+    GPWithPrivateOutputsNonprivateInputs,
+)
 from dpconvcnp.utils import cast, f32
 
 tfd = tfp.distributions
@@ -188,7 +191,7 @@ def valid_epoch(
 
             if (
                 not fast_validation and
-                type(batch.gt_pred) == GPWithPrivateOutputsNonprivateInputs
+                type(batch.gt_pred) == GPGroundTruthPredictor
             ):
 
                 (
@@ -566,14 +569,17 @@ def get_batch_info(batch: Batch, idx: int) -> tf.Tensor:
     n = batch.x_ctx.shape[1]
     epsilon = batch.epsilon[idx].numpy()
     delta = batch.delta[idx].numpy()
-    lengthscale = batch.gt_pred.kernel.kernels[0].lengthscales.numpy()
+    lengthscale = (
+        batch.gt_pred.kernel.kernels[0].lengthscales.numpy()
+        if hasattr(batch.gt_pred, "kernel")
+        else None
+    )
 
     info = {
         "n": n,
         "epsilon": epsilon,
         "delta": delta,
         "lengthscale": lengthscale,
-        "nle": n * lengthscale * epsilon,
     }
 
     return info
