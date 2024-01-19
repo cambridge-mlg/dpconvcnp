@@ -17,6 +17,7 @@ def _sawtooth(
         phi: tf.Tensor,
         freq: tf.Tensor,
     ):
+    freq = freq[:, None, None]
     y = tf.einsum("bd, bnd -> bn", d, x)[:, :, None] + phi[:, None, None]
     y = 2 * (freq * (y % (1 / freq)) - 0.5)
     return y
@@ -79,14 +80,13 @@ class SawtoothGenerator(SyntheticGenerator, ABC):
             minval=self.min_frequency*tf.ones((B,), dtype=x.dtype),
             maxval=self.max_frequency*tf.ones((B,), dtype=x.dtype),
         )
-        ifreq = 1 / freq
 
         # Draw phase phi
         seed, phi = randu(
             shape=(B,),
             seed=seed,
             minval=tf.zeros((B,), dtype=x.dtype),
-            maxval=ifreq*tf.ones((B,), dtype=x.dtype),
+            maxval=(1 / freq)*tf.ones((B,), dtype=x.dtype),
         )
 
         # Sample observation noise
@@ -103,7 +103,6 @@ class SawtoothGenerator(SyntheticGenerator, ABC):
             return mean, std
 
         # Sawtooth is 2*((d.T x + phi) % (1 / freq) - 0.5)
-        y = tf.einsum("bd, bnd -> bn", d, x)[:, :, None] + phi[:, None, None]
-        y = 2 * (freq * (y % ifreq) - 0.5) + noise
+        y = _sawtooth(d, x, phi, freq) + noise
 
         return seed, y, gt_pred
