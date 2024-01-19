@@ -11,19 +11,30 @@ from dpconvcnp.utils import i32, f32, f64, to_tensor, cast
 
 tfd = tfp.distributions
 
+def _sawtooth(
+        d: tf.Tensor,
+        x: tf.Tensor,
+        phi: tf.Tensor,
+        freq: tf.Tensor,
+    ):
+    y = tf.einsum("bd, bnd -> bn", d, x)[:, :, None] + phi[:, None, None]
+    y = 2 * (freq * (y % (1 / freq)) - 0.5)
+    return y
 
 class SawtoothGenerator(SyntheticGenerator, ABC):
     def __init__(
         self,
         *,
-        frequency_range: List[float],
+        min_frequency: float,
+        max_frequency: float,
         noise_std: float,
         dim: int,
         **kwargs,
     ):
         super().__init__(**kwargs)
 
-        self.frequency_range = frequency_range
+        self.min_frequency = min_frequency
+        self.max_frequency = max_frequency
         self.noise_std = noise_std
         self.dim = dim
 
@@ -65,8 +76,8 @@ class SawtoothGenerator(SyntheticGenerator, ABC):
         seed, freq = randu(
             shape=(B,),
             seed=seed,
-            minval=self.frequency_range[0]*tf.ones((B,), dtype=x.dtype),
-            maxval=self.frequency_range[1]*tf.ones((B,), dtype=x.dtype),
+            minval=self.min_frequency*tf.ones((B,), dtype=x.dtype),
+            maxval=self.max_frequency*tf.ones((B,), dtype=x.dtype),
         )
         ifreq = 1 / freq
 
@@ -86,8 +97,13 @@ class SawtoothGenerator(SyntheticGenerator, ABC):
             stddev=self.noise_std*tf.ones((B, N, 1), dtype=x.dtype),
         )
 
+        def gt_pred(x_pred):
+            mean = _sawtooth(d, x_pred, phi, freq)[:, :, 0]
+            std = self.noise_std*tf.ones_like(mean)
+            return mean, std
+
         # Sawtooth is 2*((d.T x + phi) % (1 / freq) - 0.5)
         y = tf.einsum("bd, bnd -> bn", d, x)[:, :, None] + phi[:, None, None]
         y = 2 * (freq * (y % ifreq) - 0.5) + noise
 
-        return seed, y, None
+        return seed, y, gt_pred

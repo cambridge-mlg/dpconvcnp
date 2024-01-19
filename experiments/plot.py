@@ -60,16 +60,6 @@ def plot(
                 x_trg=x_plot[:1],
             )
 
-            seed, loss, _, _ = model.loss(
-                seed=seed,
-                x_ctx=batches[i].x_ctx[:1],
-                y_ctx=batches[i].y_ctx[:1],
-                x_trg=batches[i].x_trg[:1],
-                y_trg=batches[i].y_trg[:1],
-                epsilon=batches[i].epsilon[:1],
-                delta=batches[i].delta[:1],
-            )
-
             # Make figure for plotting
             plt.figure(figsize=figsize)
 
