@@ -146,13 +146,6 @@ class RandomScaleGPGenerator(GPGenerator):
 
     def set_up_kernel(self, seed: Seed) -> Tuple[Seed, gpflow.kernels.Kernel]:
         # Sample lengthscale
-        #seed, log10_lengthscale = randu(
-        #    shape=(),
-        #    seed=seed,
-        #    minval=self.min_log10_lengthscale,
-        #    maxval=self.max_log10_lengthscale,
-        #)
-        #lengthscale = 10.0**log10_lengthscale
         seed, lengthscale = randu(
             shape=(),
             seed=seed,
