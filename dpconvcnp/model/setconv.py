@@ -32,11 +32,21 @@ class DPSetConvEncoder(tf.Module):
         n_norm_factor: float = 512.0,
         xmin: Optional[List[float]] = None,
         xmax: Optional[List[float]] = None,
+        skip_density_noise: bool = False,
+        skip_clip: bool = False,
         dtype: tf.DType = tf.float32,
         name="dp_set_conv",
         **kwargs,
     ):
         super().__init__(name=name, **kwargs)
+
+        assert (not skip_density_noise and not skip_clip) or (
+            (not y_bound_trainable) and (not w_noise_trainable)
+        ), (
+            f"skip_density_noise can only be used when "
+            f"y_bound and w_noise are not trainable, "
+            f"got {y_bound_trainable=} and {w_noise_trainable=}."
+        )
 
         self.points_per_unit = points_per_unit
 
@@ -92,6 +102,8 @@ class DPSetConvEncoder(tf.Module):
         self.xmax = to_tensor(xmax, dtype=dtype) if xmax is not None else None
 
         self.n_norm_factor = n_norm_factor
+        self.skip_density_noise = skip_density_noise
+        self.skip_clip = skip_clip
 
     def log_y_bound(
         self,
@@ -184,7 +196,7 @@ class DPSetConvEncoder(tf.Module):
         sens_per_sigma = dp_sens_per_sigma(epsilon=epsilon, delta=delta)
 
         # Clip context outputs and concatenate tensor of ones
-        if clip_y_ctx:
+        if clip_y_ctx and not self.skip_clip:
             y_ctx = self.clip_y(
                 y_ctx=y_ctx,
                 sens_per_sigma=sens_per_sigma,
@@ -316,7 +328,7 @@ class DPSetConvEncoder(tf.Module):
 
         kxx_chol_dimension_wise = [
             tf.linalg.cholesky(
-                kxx + 1e-6 * tf.eye(tf.shape(kxx)[-1], dtype=kxx.dtype)
+                kxx + 1e-5 * tf.eye(tf.shape(kxx)[-1], dtype=kxx.dtype)
             )
             for kxx in kxx_dimension_wise
         ]
@@ -346,10 +358,19 @@ class DPSetConvEncoder(tf.Module):
             ndims=len(tf.shape(data_noise)) - 1,
         )  # shape (batch_size, 1, ..., 1)
 
-        density_sigma = expand_last_dims(
-            self.density_sigma(sens_per_sigma=sens_per_sigma, num_ctx=num_ctx),
-            ndims=len(tf.shape(density_noise)) - 1,
-        )  # shape (batch_size, 1, ..., 1)
+        if self.skip_density_noise:
+            density_sigma = tf.zeros_like(
+                data_sigma
+            )  # shape (batch_size, 1, ..., 1)
+
+        else:
+            density_sigma = expand_last_dims(
+                self.density_sigma(
+                    sens_per_sigma=sens_per_sigma,
+                    num_ctx=num_ctx,
+                ),
+                ndims=len(tf.shape(density_noise)) - 1,
+            )  # shape (batch_size, 1, ..., 1)
 
         # Multiply noise by standard deviations
         noise = tf.stack(

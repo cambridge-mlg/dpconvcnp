@@ -32,6 +32,7 @@ class DPConvCNP(tf.keras.Model):
         x_trg: tf.Tensor,
         epsilon: tf.Tensor,
         delta: tf.Tensor,
+        training: bool = False,
     ) -> Tuple[Seed, tf.Tensor, tf.Tensor]:
         seed, x_grid, z_grid = self.dpsetconv_encoder(
             seed=seed,
@@ -42,7 +43,7 @@ class DPConvCNP(tf.keras.Model):
             delta=delta,
         )
 
-        z_grid = self.conv_net(z_grid)
+        z_grid = self.conv_net(z_grid, training=training)
 
         z_trg = self.setconv_decoder(
             x_grid=x_grid,
@@ -65,6 +66,7 @@ class DPConvCNP(tf.keras.Model):
         y_trg: tf.Tensor,
         epsilon: tf.Tensor,
         delta: tf.Tensor,
+        training: bool = False,
     ) -> Tuple[Seed, tf.Tensor, tf.Tensor, tf.Tensor]:
         seed, mean, std = self.__call__(
             seed=seed,
@@ -73,6 +75,7 @@ class DPConvCNP(tf.keras.Model):
             x_trg=x_trg,
             epsilon=epsilon,
             delta=delta,
+            training=training,
         )
 
         log_prob = tfd.Normal(loc=mean, scale=std).log_prob(y_trg)

@@ -113,23 +113,6 @@ def plot(
                 )
                 model_nll = tf.reduce_sum(loss) / batches[i].y_trg.shape[1]
 
-            # Use ground truth to make predictions at x_plot
-            gt_mean, gt_std, _ = batches[i].gt_pred(
-                x_ctx=batches[i].x_ctx[:1],
-                y_ctx=batches[i].y_ctx[:1],
-                x_trg=x_plot[:1],
-            )
-
-            seed, loss, _, _ = model.loss(
-                seed=seed,
-                x_ctx=batches[i].x_ctx[:1],
-                y_ctx=batches[i].y_ctx[:1],
-                x_trg=batches[i].x_trg[:1],
-                y_trg=batches[i].y_trg[:1],
-                epsilon=batches[i].epsilon[:1],
-                delta=batches[i].delta[:1],
-            )
-
             # Make figure for plotting
             plt.figure(figsize=figsize)
 
@@ -166,28 +149,38 @@ def plot(
                 label="Model",
             )
 
-            # Plot ground truth
-            plt.plot(
-                x_plot[0, :, 0],
-                gt_mean[0, :],
-                "--",
-                color="tab:purple",
-            )
 
-            plt.plot(
-                x_plot[0, :, 0],
-                gt_mean[0, :] + 2 * gt_std[0, :],
-                "--",
-                color="tab:purple",
-            )
+            if batches[i].gt_pred is not None:
 
-            plt.plot(
-                x_plot[0, :, 0],
-                gt_mean[0, :] - 2 * gt_std[0, :],
-                "--",
-                color="tab:purple",
-                label="Ground truth",
-            )
+                # Use ground truth to make predictions at x_plot
+                gt_mean, gt_std, _, _ = batches[i].gt_pred(
+                    x_ctx=batches[i].x_ctx[:1],
+                    y_ctx=batches[i].y_ctx[:1],
+                    x_trg=x_plot[:1],
+                )
+
+                # Plot ground truth
+                plt.plot(
+                    x_plot[0, :, 0],
+                    gt_mean[0, :],
+                    "--",
+                    color="tab:purple",
+                )
+
+                plt.plot(
+                    x_plot[0, :, 0],
+                    gt_mean[0, :] + 2 * gt_std[0, :],
+                    "--",
+                    color="tab:purple",
+                )
+
+                plt.plot(
+                    x_plot[0, :, 0],
+                    gt_mean[0, :] - 2 * gt_std[0, :],
+                    "--",
+                    color="tab:purple",
+                    label="Ground truth",
+                )
 
             # Set axis limits
             plt.xlim(x_range)
@@ -195,11 +188,15 @@ def plot(
 
             # Set title
             info = get_batch_info(batches[i], 0)
+            ell_str = (
+                f"$\\ell$ = {info['lengthscale']:.2f}  "
+                if info["lengthscale"]
+                else ""
+            )
             plt.title(
                 f"$N = {info['n']}$   "
-                f"$\\ell$ = {info['lengthscale']:.2f}  "
+                f"{ell_str}"
                 f"$\\epsilon$ = {info['epsilon']:.2f}  "
-                f"$N\\ell \\epsilon$ = {info['nle']:.0f}  "
                 f"$\\delta$ = {info['delta']:.3f}",
                 fontsize=24,
             )
@@ -272,7 +269,7 @@ def plot(
             gt_pred = batches[i].gt_pred
 
             if gt_pred is not None:
-                gt_mean, gt_std, _ = gt_pred(
+                gt_mean, gt_std, _, _ = gt_pred(
                     x_ctx=batches[i].x_ctx[:1],
                     y_ctx=batches[i].y_ctx[:1],
                     x_trg=batches[i].x_trg[:1],

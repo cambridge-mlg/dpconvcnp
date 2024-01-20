@@ -8,6 +8,7 @@ def main():
         base_seed,
         generator,
         experiment_path,
+        eval_dirname,
         eval_name,
     ) = initialize_evaluation()
 
@@ -19,14 +20,14 @@ def main():
     )
 
     plot(
-        path=f"{experiment_path}/eval/{eval_name}",
+        path=f"{experiment_path}/{eval_dirname}/{eval_name}",
         model=model,
         seed=base_seed,
         batches=batches,
     )
 
     evaluation_summary(
-        path=f"{experiment_path}/eval/{eval_name}",
+        path=f"{experiment_path}/{eval_dirname}/{eval_name}",
         evaluation_result=result,
         batches=batches,
     )
