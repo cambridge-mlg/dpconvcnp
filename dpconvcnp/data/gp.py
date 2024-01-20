@@ -383,7 +383,13 @@ class MixtureGPGroundTruthPredictor(GroundTruthPredictor):
         comp_var = comp_std**2.0
 
         # Compute marginal likelihoods
-        weights = tf.nn.softmax(tf.stack(gt_log_marg_lik, axis=0), axis=0)
+        log_weights = tf.stack(gt_log_marg_lik, axis=0)
+        log_weights = log_weights - tf.reduce_logsumexp(
+            log_weights,
+            axis=0,
+            keepdims=True,
+        )
+        weights = tf.exp(log_weights)
         weights = weights[:, :, None, None]
         gt_log_marg_lik = tf.stack(gt_log_marg_lik, axis=0)
 
@@ -408,7 +414,7 @@ class MixtureGPGroundTruthPredictor(GroundTruthPredictor):
         if y_trg is not None:
             gt_log_lik = tf.stack(gt_log_lik, axis=0)
             gt_log_lik = tf.reduce_logsumexp(
-                gt_log_lik + gt_log_marg_lik,
+                gt_log_lik + log_weights,
                 axis=0,
             )
 
