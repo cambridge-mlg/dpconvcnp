@@ -571,8 +571,10 @@ def get_batch_info(batch: Batch, idx: int) -> tf.Tensor:
     delta = batch.delta[idx].numpy()
     lengthscale = (
         batch.gt_pred.kernel.kernels[0].lengthscales.numpy()
-        if hasattr(batch.gt_pred, "kernel")
-        else None
+        if (
+            hasattr(batch.gt_pred, "kernel") and
+            hasattr(batch.gt_pred.kernel.kernels[0], "lengthscales")
+        ) else None
     )
 
     info = {
