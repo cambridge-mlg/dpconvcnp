@@ -7,7 +7,6 @@ generators:
       - eq
       - weakly_periodic
     log10_lengthscale: 0.1761
-    log10_lengthscale: 0.1761
     noise_std: 0.2
     min_num_ctx: 1
     max_num_ctx: 512
@@ -28,7 +27,6 @@ generators:
     kernel_types: 
       - eq
       - weakly_periodic
-    log10_lengthscale: 0.1761
     log10_lengthscale: 0.1761
     noise_std: 0.2
     min_num_ctx: 1
