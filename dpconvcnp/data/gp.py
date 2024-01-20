@@ -269,7 +269,7 @@ class MixtureGPGenerator(RandomScaleGPGenerator):
             maxval=len(self.kernel_types) - 1,
         ) if kernel_type is None else (seed, kernel_type)
 
-        kernel_type = self.kernel_types[kernel_type]
+        kernel_type = self.kernel_types[int(kernel_type)]
 
         return super().set_up_kernel(seed=seed, kernel_type=kernel_type)
 
