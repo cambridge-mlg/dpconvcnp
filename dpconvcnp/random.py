@@ -136,7 +136,7 @@ def mvn(
     mean: tf.Tensor,
     cov: tf.Tensor,
 ) -> Tuple[Seed, tf.Tensor]:
-    """Generate random multivariate normals with mean `mean` and covariance `cov`,
+    """Generate multivariate normals with mean `mean` and covariance `cov`,
     and propagate a new random seed.
 
     Arguments:
@@ -147,7 +147,7 @@ def mvn(
 
     Returns:
         seed: New random seed produced by splitting.
-        rand: Random multivariate normals with mean `loc` and covariance `scale`.
+        rand: Multivariate normals with mean `loc` and covariance `scale`.
     """
 
     return mvn_chol(
@@ -173,7 +173,7 @@ def mvn_chol(
 
     Returns:
         seed: New random seed produced by splitting.
-        rand: Random multivariate normals with mean `loc` and covariance `scale`.
+        rand: Multivariate normals with mean `loc` and covariance `scale`.
     """
 
     assert (
@@ -221,7 +221,7 @@ def zero_mean_mvn(
 
     Returns:
         seed: New random seed produced by splitting.
-        rand: Random multivariate normals with mean `loc` and covariance `scale`.
+        rand: Multivariate normals with mean `loc` and covariance `scale`.
     """
 
     # Create mean of zeroes
@@ -242,7 +242,7 @@ def zero_mean_mvn_chol(
 
     Returns:
         seed: New random seed produced by splitting.
-        rand: Random multivariate normals with mean `loc` and covariance `scale`.
+        rand: Multivariate normals with mean `loc` and cov cholesky `scale`.
     """
 
     # Create mean of zeroes

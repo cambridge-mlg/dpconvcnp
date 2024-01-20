@@ -93,7 +93,7 @@ def plot(
             if batches[i].gt_pred is not None:
 
                 # Use ground truth to make predictions at x_plot
-                gt_mean, gt_std, _ = batches[i].gt_pred(
+                gt_mean, gt_std, _, _ = batches[i].gt_pred(
                     x_ctx=batches[i].x_ctx[:1],
                     y_ctx=batches[i].y_ctx[:1],
                     x_trg=x_plot[:1],
@@ -211,7 +211,7 @@ def plot(
             gt_pred = batches[i].gt_pred
 
             if gt_pred is not None:
-                gt_mean, gt_std, _ = gt_pred(
+                gt_mean, gt_std, _, _ = gt_pred(
                     x_ctx=batches[i].x_ctx[:1],
                     y_ctx=batches[i].y_ctx[:1],
                     x_trg=batches[i].x_trg[:1],

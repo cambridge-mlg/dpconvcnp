@@ -165,7 +165,7 @@ def valid_epoch(
         result["pred_std"].append(std[:, :, 0])
 
         if batch.gt_pred is not None:
-            gt_mean, gt_std, gt_log_lik = batch.gt_pred(
+            gt_mean, gt_std, gt_log_lik, _ = batch.gt_pred(
                 x_ctx=batch.x_ctx,
                 y_ctx=batch.y_ctx,
                 x_trg=batch.x_trg,
@@ -571,8 +571,10 @@ def get_batch_info(batch: Batch, idx: int) -> tf.Tensor:
     delta = batch.delta[idx].numpy()
     lengthscale = (
         batch.gt_pred.kernel.kernels[0].lengthscales.numpy()
-        if hasattr(batch.gt_pred, "kernel")
-        else None
+        if (
+            hasattr(batch.gt_pred, "kernel") and
+            hasattr(batch.gt_pred.kernel.kernels[0], "lengthscales")
+        ) else None
     )
 
     info = {
