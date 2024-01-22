@@ -168,13 +168,3 @@ class WaveformGenerator(SyntheticGenerator, ABC):
         y = self.waveform_func(d, x, phi, freq) + noise
 
         return seed, y, None
-
-
-class SawtoothGenerator(WaveformGenerator):
-    def __init__(self, **kwargs):
-        super().__init__(waveform_func=_sawtooth, **kwargs)
-
-
-class TophatGenerator(WaveformGenerator):
-    def __init__(self, **kwargs):
-        super().__init__(waveform_func=_tophat, **kwargs)
