@@ -16,10 +16,27 @@ def _sawtooth(
         x: tf.Tensor,
         phi: tf.Tensor,
         freq: tf.Tensor,
-    ):
+    ) -> tf.Tensor:
+    """
+    Computes output of the sawtooth function given a normalised direction
+    vector `d`, a tensor of inputs `x`, a phase parameter `phi` and a
+    frequency `freq`.
+
+    Arguments:
+        d: Tensor of shape (batch_size, dim) containing normalised direction
+            vectors.
+        x: Tensor of shape (batch_size, num_ctx + num_trg, dim) containing
+            the context and target inputs.
+        phi: Tensor of shape (batch_size,) containing phase parameters.
+        freq: Tensor of shape (batch_size,) containing frequencies.
+
+    Returns:
+        y: Tensor of shape (batch_size, num_ctx + num_trg, 1) containing
+            the context and target outputs.
+    """
     freq = freq[:, None, None]
     phi = (1 / freq) * phi[:, None, None]
-    y = tf.einsum("bd, bnd -> bn", d, x)[:, :, None] + phi[:, None, None]
+    y = tf.einsum("bd, bnd -> bn", d, x)[:, :, None] + phi
     y = 2 * (freq * (y % (1 / freq)) - 0.5)
     return y
 
@@ -28,10 +45,27 @@ def _tophat(
         x: tf.Tensor,
         phi: tf.Tensor,
         freq: tf.Tensor,
-    ):
+    ) -> tf.Tensor:
+    """
+    Computes output of the tophat function given a normalised direction
+    vector `d`, a tensor of inputs `x`, a phase parameter `phi` and a
+    frequency `freq`.
+
+    Arguments:
+        d: Tensor of shape (batch_size, dim) containing normalised direction
+            vectors.
+        x: Tensor of shape (batch_size, num_ctx + num_trg, dim) containing
+            the context and target inputs.
+        phi: Tensor of shape (batch_size,) containing phase parameters.
+        freq: Tensor of shape (batch_size,) containing frequencies.
+
+    Returns:
+        y: Tensor of shape (batch_size, num_ctx + num_trg, 1) containing
+            the context and target outputs.
+    """
     freq = freq[:, None, None]
     phi = 0.5 / freq * phi[:, None, None]
-    y = tf.einsum("bd, bnd -> bn", d, x)[:, :, None] + phi[:, None, None]
+    y = tf.einsum("bd, bnd -> bn", d, x)[:, :, None] + phi
     y = 2. * ((y // (0.5 / freq)) % 2) - 1.
     return y
 
