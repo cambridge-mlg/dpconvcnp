@@ -126,7 +126,6 @@ class GPGenerator(SyntheticGenerator, ABC):
 
 
 class RandomScaleGPGenerator(GPGenerator):
-    weakly_periodic_period: tf.Tensor = to_tensor(2.0, f64)
 
     def __init__(
         self,
@@ -213,7 +212,7 @@ class RandomScaleGPGenerator(GPGenerator):
                 gpflow.kernels.SquaredExponential(
                     lengthscales=3e-1,
                 ),
-                period=self.weakly_periodic_period,
+                period=lengthscale / 4.,
             )
 
         else:
