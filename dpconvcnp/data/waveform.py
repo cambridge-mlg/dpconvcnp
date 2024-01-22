@@ -12,6 +12,11 @@ from dpconvcnp.utils import i32, f32, f64, to_tensor, cast
 tfd = tfp.distributions
 
 
+def _sawtooth_series(z: tf.Tensor, n: int):
+    series_terms = [tf.sin(2 * m * np.pi * z) / m for m in range(1, n + 1)]
+    return 2 / np.pi * tf.reduce_sum(series_terms, axis=0)
+
+
 def _sawtooth(
     d: tf.Tensor,
     x: tf.Tensor,
@@ -38,8 +43,15 @@ def _sawtooth(
     freq = freq[:, None, None]
     phi = (1 / freq) * phi[:, None, None]
     y = tf.einsum("bd, bnd -> bn", d, x)[:, :, None] + phi
-    y = 2 * (freq * (y % (1 / freq)) - 0.5)
+    y = _sawtooth_series(y * freq, n=3)
     return y
+
+
+def _tophat_series(z: tf.Tensor, n: int):
+    series_terms = [
+        tf.sin(4 * (2 * m + 1) * np.pi * z) / (2 * m + 1) for m in range(n)
+    ]
+    return 4 / np.pi * tf.reduce_sum(series_terms, axis=0)
 
 
 def _tophat(
@@ -66,9 +78,9 @@ def _tophat(
             the context and target outputs.
     """
     freq = freq[:, None, None]
-    phi = 0.5 / freq * phi[:, None, None]
-    y = tf.einsum("bd, bnd -> bn", d, x)[:, :, None] + phi
-    y = 2.0 * ((y // (0.5 / freq)) % 2) - 1.0
+    phi = phi[:, None, None]
+    y = (tf.einsum("bd, bnd -> bn", d, x)[:, :, None] + phi) / (2 / freq)
+    y = _tophat_series(y, n=4) # y = 2.0 * ((y // (0.5 / freq)) % 2) - 1.0
     return y
 
 
@@ -81,6 +93,7 @@ class WaveformGenerator(SyntheticGenerator, ABC):
         max_frequency: float,
         noise_std: float,
         dim: int,
+        smooth_power: Optional[int] = 4,
         **kwargs,
     ):
         super().__init__(**kwargs)
@@ -94,11 +107,13 @@ class WaveformGenerator(SyntheticGenerator, ABC):
         else:
             raise ValueError(f"Unknown waveform function: {waveform_func}")
 
+        assert smooth_power % 2 == 0
+
         self.min_frequency = min_frequency
         self.max_frequency = max_frequency
         self.noise_std = noise_std
-        self.waveform_func = waveform_func
         self.dim = dim
+        self.smooth_power = smooth_power
 
     def sample_outputs(
         self,
