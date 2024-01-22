@@ -18,14 +18,28 @@ def _sawtooth(
         freq: tf.Tensor,
     ):
     freq = freq[:, None, None]
+    phi = (1 / freq) * phi[:, None, None]
     y = tf.einsum("bd, bnd -> bn", d, x)[:, :, None] + phi[:, None, None]
     y = 2 * (freq * (y % (1 / freq)) - 0.5)
     return y
 
-class SawtoothGenerator(SyntheticGenerator, ABC):
+def _tophat(
+        d: tf.Tensor,
+        x: tf.Tensor,
+        phi: tf.Tensor,
+        freq: tf.Tensor,
+    ):
+    freq = freq[:, None, None]
+    phi = 0.5 / freq * phi[:, None, None]
+    y = tf.einsum("bd, bnd -> bn", d, x)[:, :, None] + phi[:, None, None]
+    y = 2. * ((y // (0.5 / freq)) % 2) - 1.
+    return y
+
+class WaveformGenerator(SyntheticGenerator, ABC):
     def __init__(
         self,
         *,
+        waveform_func: Callable,
         min_frequency: float,
         max_frequency: float,
         noise_std: float,
@@ -34,9 +48,12 @@ class SawtoothGenerator(SyntheticGenerator, ABC):
     ):
         super().__init__(**kwargs)
 
+        assert waveform_func in [_sawtooth, _tophat]
+
         self.min_frequency = min_frequency
         self.max_frequency = max_frequency
         self.noise_std = noise_std
+        self.waveform_func = waveform_func
         self.dim = dim
 
     def sample_outputs(
@@ -81,12 +98,12 @@ class SawtoothGenerator(SyntheticGenerator, ABC):
             maxval=self.max_frequency*tf.ones((B,), dtype=x.dtype),
         )
 
-        # Draw phase phi
+        # Draw phase parameter phi
         seed, phi = randu(
             shape=(B,),
             seed=seed,
             minval=tf.zeros((B,), dtype=x.dtype),
-            maxval=(1 / freq)*tf.ones((B,), dtype=x.dtype),
+            maxval=tf.ones((B,), dtype=x.dtype),
         )
 
         # Sample observation noise
@@ -97,7 +114,15 @@ class SawtoothGenerator(SyntheticGenerator, ABC):
             stddev=self.noise_std*tf.ones((B, N, 1), dtype=x.dtype),
         )
 
-        # Sawtooth is 2*((d.T x + phi) % (1 / freq) - 0.5)
-        y = _sawtooth(d, x, phi, freq) + noise
+        # Use waveform function to generate outputs and add noise
+        y = self.waveform_func(d, x, phi, freq) + noise
 
         return seed, y, None
+        
+class SawtoothGenerator(WaveformGenerator):
+    def __init__(self, **kwargs):
+        super().__init__(waveform_func=_sawtooth, **kwargs)
+
+class TophatGenerator(WaveformGenerator):
+    def __init__(self, **kwargs):
+        super().__init__(waveform_func=_tophat, **kwargs)
