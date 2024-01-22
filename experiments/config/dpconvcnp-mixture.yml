@@ -55,8 +55,8 @@ dpsetconv:
   points_per_unit: ${params.points_per_unit}
   dim: ${params.dim}
   margin: 2.5
-  xmin: -4.0
-  xmax: 4.0
+  xmin: [-4.0]
+  xmax: [4.0]
   lengthscale_init: 0.1
   y_bound_init: 2.0
   w_noise_init: 0.5
