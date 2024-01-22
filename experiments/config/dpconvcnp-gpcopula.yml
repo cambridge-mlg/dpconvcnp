@@ -5,7 +5,8 @@ generators:
     dim: ${params.dim}
     kernel_type: eq
     marg_dist: Laplace
-    log10_lengthscale: -0.602
+    min_log10_lengthscale: -0.602
+    max_log10_lengthscale: -0.602
     noise_std: 0.2
     min_num_ctx: 1
     max_num_ctx: 512
@@ -25,7 +26,8 @@ generators:
     dim: ${params.dim}
     kernel_type: eq
     marg_dist: Laplace
-    log10_lengthscale: -0.602
+    min_log10_lengthscale: -0.602
+    max_log10_lengthscale: -0.602
     noise_std: 0.2
     min_num_ctx: 1
     max_num_ctx: 512

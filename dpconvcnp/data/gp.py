@@ -252,15 +252,16 @@ class MixtureGPGenerator(RandomScaleGPGenerator):
         self,
         *,
         dim: int,
-        log10_lengthscale: float,
+        min_log10_lengthscale: float,
+        max_log10_lengthscale: float,
         kernel_types: List[str] = KERNEL_TYPES,
         **kwargs,
     ):
         super().__init__(
             dim=dim,
             kernel_type=None,
-            min_log10_lengthscale=log10_lengthscale,
-            max_log10_lengthscale=log10_lengthscale,
+            min_log10_lengthscale=min_log10_lengthscale,
+            max_log10_lengthscale=max_log10_lengthscale,
             **kwargs,
         )
 
@@ -288,18 +289,19 @@ class MixtureGPGenerator(RandomScaleGPGenerator):
         return super().set_up_kernel(seed=seed, kernel_type=kernel_type)
 
     def set_up_ground_truth_predictor(self, seed: Seed, **kwargs) -> Callable:
-        _, kernels, kernels_noiseless, noises_std = zip(
-            *[
-                self.set_up_kernel(seed=seed, kernel_type=kernel_type)
-                for kernel_type in range(len(self.kernel_types))
-            ]
-        )
+        #_, kernels, kernels_noiseless, noises_std = zip(
+        #    *[
+        #        self.set_up_kernel(seed=seed, kernel_type=kernel_type)
+        #        for kernel_type in range(len(self.kernel_types))
+        #    ]
+        #)
 
-        return MixtureGPGroundTruthPredictor(
-            kernels=kernels,
-            kernels_noiseless=kernels_noiseless,
-            noise_std=noises_std,
-        )
+        #return MixtureGPGroundTruthPredictor(
+        #    kernels=kernels,
+        #    kernels_noiseless=kernels_noiseless,
+        #    noise_std=noises_std,
+        #)
+        return None
 
 
 class GPGroundTruthPredictor(GroundTruthPredictor):
@@ -443,14 +445,15 @@ class GPCopulaGenerator(RandomScaleGPGenerator):
         self,
         *,
         noise_std: float,
-        log10_lengthscale: float,
+        min_log10_lengthscale: float,
+        max_log10_lengthscale: float,
         marg_dist: str,
         **kwargs,
     ):
         super().__init__(
             noise_std=noise_std,
-            min_log10_lengthscale=log10_lengthscale,
-            max_log10_lengthscale=log10_lengthscale,
+            min_log10_lengthscale=min_log10_lengthscale,
+            max_log10_lengthscale=max_log10_lengthscale,
             **kwargs,
         )
 
