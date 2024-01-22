@@ -207,12 +207,12 @@ class RandomScaleGPGenerator(GPGenerator):
 
         elif kernel_type == "weakly_periodic":
             kernel_noiseless = gpflow.kernels.SquaredExponential(
-                lengthscales=lengthscale,
+                lengthscales=2*lengthscale,
             ) * gpflow.kernels.Periodic(
                 gpflow.kernels.SquaredExponential(
                     lengthscales=3e-1,
                 ),
-                period=lengthscale / 2.,
+                period=lengthscale,
             )
 
         else:

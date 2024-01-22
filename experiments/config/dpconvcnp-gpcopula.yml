@@ -4,7 +4,7 @@ generators:
     seed: ${params.generator_train_seed}
     dim: ${params.dim}
     kernel_type: eq
-    marg_dist: Cauchy
+    marg_dist: Laplace
     log10_lengthscale: -0.602
     noise_std: 0.2
     min_num_ctx: 1
@@ -24,7 +24,7 @@ generators:
     seed: ${params.generator_valid_seed}
     dim: ${params.dim}
     kernel_type: eq
-    marg_dist: Cauchy
+    marg_dist: Laplace
     log10_lengthscale: -0.602
     noise_std: 0.2
     min_num_ctx: 1
