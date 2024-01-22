@@ -1,6 +1,6 @@
 generators:
   train:
-    _target_: dpconvcnp.data.waveform.SawtoothGenerator
+    _target_: dpconvcnp.data.waveform.SquareGenerator
     seed: ${params.generator_train_seed}
     dim: ${params.dim}
     noise_std: 0.2
@@ -19,7 +19,7 @@ generators:
     min_log10_delta: -3
     max_log10_delta: -3
   valid:
-    _target_: dpconvcnp.data.waveform.SawtoothGenerator
+    _target_: dpconvcnp.data.waveform.SquareGenerator
     seed: ${params.generator_valid_seed}
     dim: ${params.dim}
     noise_std: 0.2
