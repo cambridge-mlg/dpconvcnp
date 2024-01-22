@@ -13,7 +13,7 @@ tfd = tfp.distributions
 
 
 def _sawtooth_series(z: tf.Tensor, n: int):
-    series_terms = [tf.sin(2 * m * np.pi * z) / m for m in range(1, n + 1)]
+    series_terms = [tf.sin(m * np.pi * z) / m for m in range(1, n + 1)]
     return 2 / np.pi * tf.reduce_sum(series_terms, axis=0)
 
 
