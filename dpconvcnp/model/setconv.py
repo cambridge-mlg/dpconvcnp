@@ -514,6 +514,7 @@ def make_adaptive_grids(
     Returns:
         Tensor of shape (batch_size, n1, n2, ..., ndim, dim)
     """
+    raise Exception
 
     # Compute the lower and upper corners of the box containing the points
     xmin = tf.reduce_min(x, axis=1)
