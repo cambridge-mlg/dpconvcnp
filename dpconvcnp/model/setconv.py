@@ -209,19 +209,11 @@ class DPSetConvEncoder(tf.Module):
         )  # shape (batch_size, num_ctx, Dy+1)
 
         # Build dimension wise grids
-        x_grid, x_dimension_wise_grids = (
-            make_adaptive_grids(
-                x=tf.concat([x_ctx, x_trg], axis=1),
-                points_per_unit=self.points_per_unit,
-                margin=self.margin,
-            )
-            if self.xmin is None or self.xmax is None
-            else make_grids(
-                xmin=tf.tile(self.xmin[None, :], [tf.shape(x_ctx)[0], 1]),
-                xmax=tf.tile(self.xmax[None, :], [tf.shape(x_ctx)[0], 1]),
-                points_per_unit=self.points_per_unit,
-                margin=self.margin,
-            )
+        x_grid, x_dimension_wise_grids = make_grids(
+            xmin=tf.tile(self.xmin[None, :], [tf.shape(x_ctx)[0], 1]),
+            xmax=tf.tile(self.xmax[None, :], [tf.shape(x_ctx)[0], 1]),
+            points_per_unit=self.points_per_unit,
+            margin=self.margin,
         )  # list of tensors of shape (batch_size, 2*N[d]+1)
 
         x_grid_flat = flatten_grid(
@@ -514,7 +506,6 @@ def make_adaptive_grids(
     Returns:
         Tensor of shape (batch_size, n1, n2, ..., ndim, dim)
     """
-    raise Exception
 
     # Compute the lower and upper corners of the box containing the points
     xmin = tf.reduce_min(x, axis=1)
