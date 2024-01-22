@@ -11,12 +11,13 @@ from dpconvcnp.utils import i32, f32, f64, to_tensor, cast
 
 tfd = tfp.distributions
 
+
 def _sawtooth(
-        d: tf.Tensor,
-        x: tf.Tensor,
-        phi: tf.Tensor,
-        freq: tf.Tensor,
-    ) -> tf.Tensor:
+    d: tf.Tensor,
+    x: tf.Tensor,
+    phi: tf.Tensor,
+    freq: tf.Tensor,
+) -> tf.Tensor:
     """
     Computes output of the sawtooth function given a normalised direction
     vector `d`, a tensor of inputs `x`, a phase parameter `phi` and a
@@ -40,12 +41,13 @@ def _sawtooth(
     y = 2 * (freq * (y % (1 / freq)) - 0.5)
     return y
 
+
 def _tophat(
-        d: tf.Tensor,
-        x: tf.Tensor,
-        phi: tf.Tensor,
-        freq: tf.Tensor,
-    ) -> tf.Tensor:
+    d: tf.Tensor,
+    x: tf.Tensor,
+    phi: tf.Tensor,
+    freq: tf.Tensor,
+) -> tf.Tensor:
     """
     Computes output of the tophat function given a normalised direction
     vector `d`, a tensor of inputs `x`, a phase parameter `phi` and a
@@ -66,14 +68,15 @@ def _tophat(
     freq = freq[:, None, None]
     phi = 0.5 / freq * phi[:, None, None]
     y = tf.einsum("bd, bnd -> bn", d, x)[:, :, None] + phi
-    y = 2. * ((y // (0.5 / freq)) % 2) - 1.
+    y = 2.0 * ((y // (0.5 / freq)) % 2) - 1.0
     return y
+
 
 class WaveformGenerator(SyntheticGenerator, ABC):
     def __init__(
         self,
         *,
-        waveform_func: Callable,
+        waveform_func: str,
         min_frequency: float,
         max_frequency: float,
         noise_std: float,
@@ -82,7 +85,14 @@ class WaveformGenerator(SyntheticGenerator, ABC):
     ):
         super().__init__(**kwargs)
 
-        assert waveform_func in [_sawtooth, _tophat]
+        if waveform_func == "sawtooth":
+            self.waveform_func = _sawtooth
+
+        elif waveform_func == "tophat":
+            self.waveform_func = _tophat
+
+        else:
+            raise ValueError(f"Unknown waveform function: {waveform_func}")
 
         self.min_frequency = min_frequency
         self.max_frequency = max_frequency
@@ -91,7 +101,9 @@ class WaveformGenerator(SyntheticGenerator, ABC):
         self.dim = dim
 
     def sample_outputs(
-        self, seed: Seed, x: tf.Tensor,
+        self,
+        seed: Seed,
+        x: tf.Tensor,
     ) -> Tuple[Seed, tf.Tensor, Callable]:
         """Sample context and target outputs, given the inputs `x`.
 
@@ -118,18 +130,22 @@ class WaveformGenerator(SyntheticGenerator, ABC):
             mean=tf.zeros((B, D), dtype=x.dtype),
             stddev=tf.ones((B, D), dtype=x.dtype),
         )
-        d = d / tf.reduce_sum(
-            d**2. + 1e-6,
-            axis=-1,
-            keepdims=True,
-        )**0.5
+        d = (
+            d
+            / tf.reduce_sum(
+                d**2.0 + 1e-6,
+                axis=-1,
+                keepdims=True,
+            )
+            ** 0.5
+        )
 
         # Draw frequency
         seed, freq = randu(
             shape=(B,),
             seed=seed,
-            minval=self.min_frequency*tf.ones((B,), dtype=x.dtype),
-            maxval=self.max_frequency*tf.ones((B,), dtype=x.dtype),
+            minval=self.min_frequency * tf.ones((B,), dtype=x.dtype),
+            maxval=self.max_frequency * tf.ones((B,), dtype=x.dtype),
         )
 
         # Draw phase parameter phi
@@ -145,17 +161,19 @@ class WaveformGenerator(SyntheticGenerator, ABC):
             shape=(B, N, 1),
             seed=seed,
             mean=tf.zeros((B, N, 1), dtype=x.dtype),
-            stddev=self.noise_std*tf.ones((B, N, 1), dtype=x.dtype),
+            stddev=self.noise_std * tf.ones((B, N, 1), dtype=x.dtype),
         )
 
         # Use waveform function to generate outputs and add noise
         y = self.waveform_func(d, x, phi, freq) + noise
 
         return seed, y, None
-        
+
+
 class SawtoothGenerator(WaveformGenerator):
     def __init__(self, **kwargs):
         super().__init__(waveform_func=_sawtooth, **kwargs)
+
 
 class TophatGenerator(WaveformGenerator):
     def __init__(self, **kwargs):

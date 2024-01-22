@@ -212,7 +212,7 @@ class RandomScaleGPGenerator(GPGenerator):
                 gpflow.kernels.SquaredExponential(
                     lengthscales=3e-1,
                 ),
-                period=lengthscale / 4.,
+                period=lengthscale / 2.,
             )
 
         else:
