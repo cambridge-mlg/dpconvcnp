@@ -67,6 +67,7 @@ def train_step(
         loss = tf.reduce_mean(loss) / cast(tf.shape(y_trg)[1], f32)
 
     gradients = tape.gradient(loss, model.trainable_variables)
+    gradients = [tf.where(tf.math.is_nan(g), tf.zeros_like(g), g) for g in gradients]
     optimizer.apply_gradients(zip(gradients, model.trainable_variables))
 
     return seed, loss
@@ -190,10 +191,9 @@ def valid_epoch(
             )
 
             if (
-                not fast_validation and
-                type(batch.gt_pred) == GPGroundTruthPredictor
+                not fast_validation
+                and type(batch.gt_pred) == GPGroundTruthPredictor
             ):
-
                 (
                     seed,
                     _,
@@ -244,7 +244,7 @@ def valid_epoch(
         result[f"mean_ideal_channel_loss"] = tf.reduce_mean(
             result[f"ideal_channel_loss"],
         )
-        
+
     result["epsilon"] = tf.concat([b.epsilon for b in batches], axis=0)
     result["delta"] = tf.concat([b.delta for b in batches], axis=0)
 
@@ -295,7 +295,9 @@ def evaluation_summary(
         {
             "loss": evaluation_result["loss"].numpy(),
             "gt_loss": evaluation_result["gt_loss"].numpy(),
-            "ideal_channel_loss": evaluation_result["ideal_channel_loss"].numpy(),
+            "ideal_channel_loss": evaluation_result[
+                "ideal_channel_loss"
+            ].numpy(),
             "kl_diag": evaluation_result["kl_diag"].numpy(),
             "epsilon": evaluation_result["epsilon"].numpy(),
             "delta": evaluation_result["delta"].numpy(),
@@ -325,7 +327,9 @@ class ModelCheckpointer:
             valid_result: validation result dictionary.
         """
 
-        loss_ci = valid_result["mean_loss"] + 1.96 * valid_result["stderr_loss"]
+        loss_ci = (
+            valid_result["mean_loss"] + 1.96 * valid_result["stderr_loss"]
+        )
 
         if loss_ci < self.best_validation_loss:
             self.best_validation_loss = loss_ci
@@ -572,9 +576,10 @@ def get_batch_info(batch: Batch, idx: int) -> tf.Tensor:
     lengthscale = (
         batch.gt_pred.kernel.kernels[0].lengthscales.numpy()
         if (
-            hasattr(batch.gt_pred, "kernel") and
-            hasattr(batch.gt_pred.kernel.kernels[0], "lengthscales")
-        ) else None
+            hasattr(batch.gt_pred, "kernel")
+            and hasattr(batch.gt_pred.kernel.kernels[0], "lengthscales")
+        )
+        else None
     )
 
     info = {

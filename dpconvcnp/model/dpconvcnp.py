@@ -52,7 +52,7 @@ class DPConvCNP(tf.keras.Model):
         )
 
         mean = z_trg[..., :1]
-        std = tf.math.softplus(z_trg[..., 1:]) ** 0.5
+        std = tf.math.softplus(z_trg[..., 1:]) ** 0.5 + 1e-3
 
         return seed, mean, std
 
