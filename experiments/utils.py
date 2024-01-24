@@ -286,11 +286,9 @@ def evaluation_summary(
     df = pd.DataFrame(
         {
             "loss": evaluation_result["loss"].numpy(),
-            "gt_loss": evaluation_result["gt_loss"].numpy(),
-            "ideal_channel_loss": evaluation_result[
-                "ideal_channel_loss"
-            ].numpy(),
-            "kl_diag": evaluation_result["kl_diag"].numpy(),
+            "gt_loss": evaluation_result["gt_loss"].numpy() if type(evaluation_result["gt_loss"]) is tf.Tensor else None,
+            "ideal_channel_loss": evaluation_result["ideal_channel_loss"].numpy() if type(evaluation_result["ideal_channel_loss"]) is tf.Tensor else None,
+            "kl_diag": evaluation_result["kl_diag"].numpy() if type(evaluation_result["kl_diag"]) is tf.Tensor else None,
             "epsilon": evaluation_result["epsilon"].numpy(),
             "delta": evaluation_result["delta"].numpy(),
             "n": num_ctx,
