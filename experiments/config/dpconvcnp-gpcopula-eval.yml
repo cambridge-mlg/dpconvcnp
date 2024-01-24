@@ -1,5 +1,5 @@
 generator:
-  _target_: dpconvcnp.data.gp.RandomScaleGPGenerator
+  _target_: dpconvcnp.data.gp.GPCopulaGenerator
   seed: ${params.generator_seed}
   dim: ${params.dim}
   kernel_type: eq
