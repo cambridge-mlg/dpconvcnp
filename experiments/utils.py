@@ -282,14 +282,6 @@ def evaluation_summary(
         ]
     )
 
-    lengthscale = np.array(
-        [
-            batch.gt_pred.kernel.kernels[0].lengthscales.numpy()
-            for batch in batches
-            for _ in range(len(batch.x_ctx))
-        ]
-    )
-
     # Make dataframe
     df = pd.DataFrame(
         {
@@ -302,7 +294,6 @@ def evaluation_summary(
             "epsilon": evaluation_result["epsilon"].numpy(),
             "delta": evaluation_result["delta"].numpy(),
             "n": num_ctx,
-            "lengthscale": lengthscale,
         }
     )
 
