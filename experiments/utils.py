@@ -282,13 +282,16 @@ def evaluation_summary(
         ]
     )
 
+    def try_convert_to_numpy(tensor):
+        return tensor.numpy() if type(tensor) is tf.Tensor else None
+    
     # Make dataframe
     df = pd.DataFrame(
         {
             "loss": evaluation_result["loss"].numpy(),
-            "gt_loss": evaluation_result["gt_loss"].numpy() if type(evaluation_result["gt_loss"]) is tf.Tensor else None,
-            "ideal_channel_loss": evaluation_result["ideal_channel_loss"].numpy() if type(evaluation_result["ideal_channel_loss"]) is tf.Tensor else None,
-            "kl_diag": evaluation_result["kl_diag"].numpy() if type(evaluation_result["kl_diag"]) is tf.Tensor else None,
+            "gt_loss": try_convert_to_numpy(evaluation_result["gt_loss"]),
+            "ideal_channel_loss": try_convert_to_numpy(evaluation_result["ideal_channel_loss"]),
+            "kl_diag": try_convert_to_numpy(evaluation_result["kl_diag"]),
             "epsilon": evaluation_result["epsilon"].numpy(),
             "delta": evaluation_result["delta"].numpy(),
             "n": num_ctx,
