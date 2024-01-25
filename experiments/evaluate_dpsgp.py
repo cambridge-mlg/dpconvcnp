@@ -51,16 +51,7 @@ def dp_train_model(batch: Batch, params: argparse.Namespace):
         rmse = (mean - yt).pow(2).mean().sqrt()
         kl = model._module.kl_divergence()
 
-    gt_mean, gt_std, gt_log_lik = batch.gt_pred(
-        x_ctx=batch.x_ctx,
-        y_ctx=batch.y_ctx,
-        x_trg=batch.x_trg,
-        y_trg=batch.y_trg,
-    )
-
-    gt_loss = -gt_log_lik / batch.y_trg.shape[1]
-
-    return {
+    result = {
         "batch": batch,
         "elbo": elbo,
         "exp_ll": exp_ll,
@@ -68,11 +59,24 @@ def dp_train_model(batch: Batch, params: argparse.Namespace):
         "nll": nll,
         "mean": mean,
         "std": std,
-        "gt_mean": gt_mean,
-        "gt_std": gt_std,
-        "gt_loss": gt_loss,
         "rmse": rmse,
     }
+
+    if batch.gt_pred is not None:
+        gt_mean, gt_std, gt_log_lik, _ = batch.gt_pred(
+            x_ctx=batch.x_ctx,
+            y_ctx=batch.y_ctx,
+            x_trg=batch.x_trg,
+            y_trg=batch.y_trg,
+        )
+
+        gt_loss = -gt_log_lik / batch.y_trg.shape[1]
+
+        result["gt_mean"] = gt_mean
+        result["gt_loss"] = gt_loss
+        result["gt_std"] = gt_std
+
+    return result
 
 
 def validate_dpsgp(generator, params: argparse.Namespace):
@@ -89,7 +93,8 @@ def validate_dpsgp(generator, params: argparse.Namespace):
     for k in ["elbo", "nll", "exp_ll", "kl", "rmse"]:
         result[k] = torch.stack(result[k])
 
-    result["gt_loss"] = tf.concat(result["gt_loss"], axis=0)
+    if "gt_loss" in result.keys():
+        result["gt_loss"] = tf.concat(result["gt_loss"], axis=0)
 
     return result
 
@@ -139,6 +144,7 @@ def main():
     # Load best parameters from wandb run.
     best_params = run.summary.best_params
     params = argparse.Namespace(**best_params)
+    params.kernel = instantiate(run.config["kernel"])
 
     plot(
         model=None,
@@ -150,9 +156,11 @@ def main():
     )
 
     result = validate_dpsgp(generator, params)
-    result = {
-        k: result[k].numpy() for k in ["elbo", "gt_loss", "nll", "exp_ll", "kl", "rmse"]
-    }
+    keys = ["elbo", "nll", "exp_ll", "kl", "rmse"]
+    if "gt_loss" in result.keys():
+        keys.append("gt_loss")
+
+    result = {k: result[k].numpy() for k in keys}
 
     # Log summary of evaluation.
     for k in result.keys():
@@ -162,6 +170,9 @@ def main():
         wandb.run.summary[f"eval/{evaluation.params.eval_name}/std_{k}"] = result[
             k
         ].std()
+        wandb.run.summary[f"eval/{evaluation.params.eval_name}/ste_{k}"] = result[
+            k
+        ].std() / (len(result[k]) ** 0.5)
 
 
 if __name__ == "__main__":
