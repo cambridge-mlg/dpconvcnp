@@ -1,6 +1,7 @@
 generators:
   train:
-    _target_: dpconvcnp.data.sawtooth.SawtoothGenerator
+    _target_: dpconvcnp.data.waveform.WaveformGenerator
+    waveform_func: sawtooth
     seed: ${params.generator_train_seed}
     dim: ${params.dim}
     noise_std: 0.2
@@ -19,7 +20,8 @@ generators:
     min_log10_delta: -3
     max_log10_delta: -3
   valid:
-    _target_: dpconvcnp.data.sawtooth.SawtoothGenerator
+    _target_: dpconvcnp.data.waveform.WaveformGenerator
+    waveform_func: sawtooth
     seed: ${params.generator_valid_seed}
     dim: ${params.dim}
     noise_std: 0.2
@@ -50,7 +52,9 @@ dpsetconv:
   seed: ${params.dpsetconv_seed}
   points_per_unit: ${params.points_per_unit}
   dim: ${params.dim}
-  margin: 2.5
+  margin: 2.0
+  xmin: [-7.0]
+  xmax: [7.0]
   lengthscale_init: 0.1
   y_bound_init: 2.0
   w_noise_init: 0.5

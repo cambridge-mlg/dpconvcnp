@@ -1,13 +1,12 @@
 generators:
   train:
-    _target_: dpconvcnp.data.gp.MixtureGPGenerator
+    _target_: dpconvcnp.data.gp.GPCopulaGenerator
     seed: ${params.generator_train_seed}
     dim: ${params.dim}
-    kernel_types: 
-      - eq
-      - weakly_periodic
-    min_log10_lengthscale: 0.1761
-    max_log10_lengthscale: 0.1761
+    kernel_type: eq
+    marg_dist: Laplace
+    min_log10_lengthscale: -0.602
+    max_log10_lengthscale: -0.602
     noise_std: 0.2
     min_num_ctx: 1
     max_num_ctx: 512
@@ -22,14 +21,13 @@ generators:
     min_log10_delta: -3
     max_log10_delta: -3
   valid:
-    _target_: dpconvcnp.data.gp.MixtureGPGenerator
+    _target_: dpconvcnp.data.gp.GPCopulaGenerator
     seed: ${params.generator_valid_seed}
     dim: ${params.dim}
-    kernel_types: 
-      - eq
-      - weakly_periodic
-    min_log10_lengthscale: 0.1761
-    max_log10_lengthscale: 0.1761
+    kernel_type: eq
+    marg_dist: Laplace
+    min_log10_lengthscale: -0.602
+    max_log10_lengthscale: -0.602
     noise_std: 0.2
     min_num_ctx: 1
     max_num_ctx: 512

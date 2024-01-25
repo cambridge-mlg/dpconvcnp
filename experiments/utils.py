@@ -67,6 +67,7 @@ def train_step(
         loss = tf.reduce_mean(loss) / cast(tf.shape(y_trg)[1], f32)
 
     gradients = tape.gradient(loss, model.trainable_variables)
+    gradients = [tf.where(tf.math.is_nan(g), tf.zeros_like(g), g) for g in gradients]
     optimizer.apply_gradients(zip(gradients, model.trainable_variables))
 
     return seed, loss
@@ -272,25 +273,21 @@ def evaluation_summary(
         [batch.x_ctx.shape[1] for batch in batches for _ in range(len(batch.x_ctx))]
     )
 
-    lengthscale = np.array(
-        [
-            batch.gt_pred.kernel.kernels[0].lengthscales.numpy()
-            for batch in batches
-            for _ in range(len(batch.x_ctx))
-        ]
-    )
+    def try_convert_to_numpy(tensor):
+        return tensor.numpy() if type(tensor) is tf.Tensor else None
 
     # Make dataframe
     df = pd.DataFrame(
         {
             "loss": evaluation_result["loss"].numpy(),
-            "gt_loss": evaluation_result["gt_loss"].numpy(),
-            "ideal_channel_loss": evaluation_result["ideal_channel_loss"].numpy(),
-            "kl_diag": evaluation_result["kl_diag"].numpy(),
+            "gt_loss": try_convert_to_numpy(evaluation_result["gt_loss"]),
+            "ideal_channel_loss": try_convert_to_numpy(
+                evaluation_result["ideal_channel_loss"]
+            ),
+            "kl_diag": try_convert_to_numpy(evaluation_result["kl_diag"]),
             "epsilon": evaluation_result["epsilon"].numpy(),
             "delta": evaluation_result["delta"].numpy(),
             "n": num_ctx,
-            "lengthscale": lengthscale,
         }
     )
 

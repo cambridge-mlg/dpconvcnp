@@ -31,6 +31,15 @@ KERNEL_TYPES = [
     "weakly_periodic",
 ]
 
+MARGINAL_VARIANCE = {
+    "eq": 1.0,
+    "matern12": 1.0,
+    "matern32": 1.0,
+    "matern52": 1.0,
+    "noisy_mixture": 4.0,
+    "weakly_periodic": 1.0,
+}
+
 
 class GPGenerator(SyntheticGenerator, ABC):
     def __init__(
@@ -64,10 +73,11 @@ class GPGenerator(SyntheticGenerator, ABC):
         # Set up GP kernel
         seed, kernel, kernel_noiseless, noise_std = self.set_up_kernel(
             seed=seed,
+            kernel_type=self.kernel_type,
         )
 
         # Set up ground truth predictor
-        seed, gt_pred = self.set_up_ground_truth_predictor(
+        gt_pred = self.set_up_ground_truth_predictor(
             seed=seed,
             kernel=kernel,
             kernel_noiseless=kernel_noiseless,
@@ -99,7 +109,6 @@ class GPGenerator(SyntheticGenerator, ABC):
     @abstractmethod
     def set_up_ground_truth_predictor(
         self,
-        seed: Seed,
         kernel: Callable,
         kernel_noiseless: Callable,
         noise_std: float,
@@ -117,7 +126,6 @@ class GPGenerator(SyntheticGenerator, ABC):
 
 
 class RandomScaleGPGenerator(GPGenerator):
-    weakly_periodic_period: tf.Tensor = to_tensor(2.0, f64)
 
     def __init__(
         self,
@@ -131,6 +139,8 @@ class RandomScaleGPGenerator(GPGenerator):
         **kwargs,
     ):
         super().__init__(**kwargs)
+
+        self.noise_std = noise_std
 
         if noise_std is not None:
             min_log10_noise_std = np.log10(noise_std)
@@ -197,12 +207,12 @@ class RandomScaleGPGenerator(GPGenerator):
 
         elif kernel_type == "weakly_periodic":
             kernel_noiseless = gpflow.kernels.SquaredExponential(
-                lengthscales=lengthscale,
+                lengthscales=2*lengthscale,
             ) * gpflow.kernels.Periodic(
                 gpflow.kernels.SquaredExponential(
                     lengthscales=3e-1,
                 ),
-                period=self.weakly_periodic_period,
+                period=lengthscale,
             )
 
         else:
@@ -242,15 +252,16 @@ class MixtureGPGenerator(RandomScaleGPGenerator):
         self,
         *,
         dim: int,
-        log10_lengthscale: float,
+        min_log10_lengthscale: float,
+        max_log10_lengthscale: float,
         kernel_types: List[str] = KERNEL_TYPES,
         **kwargs,
     ):
         super().__init__(
             dim=dim,
             kernel_type=None,
-            min_log10_lengthscale=log10_lengthscale,
-            max_log10_lengthscale=log10_lengthscale,
+            min_log10_lengthscale=min_log10_lengthscale,
+            max_log10_lengthscale=max_log10_lengthscale,
             **kwargs,
         )
 
@@ -262,30 +273,35 @@ class MixtureGPGenerator(RandomScaleGPGenerator):
         kernel_type: Optional[str] = None,
     ) -> Tuple[Seed, gpflow.kernels.Kernel]:
         # Sample kernel type
-        seed, kernel_type = randint(
-            shape=(),
-            seed=seed,
-            minval=0,
-            maxval=len(self.kernel_types) - 1,
-        ) if kernel_type is None else (seed, kernel_type)
+        seed, kernel_type = (
+            randint(
+                shape=(),
+                seed=seed,
+                minval=0,
+                maxval=len(self.kernel_types) - 1,
+            )
+            if kernel_type is None
+            else (seed, kernel_type)
+        )
 
         kernel_type = self.kernel_types[int(kernel_type)]
 
         return super().set_up_kernel(seed=seed, kernel_type=kernel_type)
 
     def set_up_ground_truth_predictor(self, seed: Seed, **kwargs) -> Callable:
-        _, kernels, kernels_noiseless, noises_std = zip(
-            *[
-                self.set_up_kernel(seed=seed, kernel_type=kernel_type)
-                for kernel_type in range(len(self.kernel_types))
-            ]
-        )
+        #_, kernels, kernels_noiseless, noises_std = zip(
+        #    *[
+        #        self.set_up_kernel(seed=seed, kernel_type=kernel_type)
+        #        for kernel_type in range(len(self.kernel_types))
+        #    ]
+        #)
 
-        return seed, MixtureGPGroundTruthPredictor(
-            kernels=kernels,
-            kernels_noiseless=kernels_noiseless,
-            noise_std=noises_std,
-        )
+        #return MixtureGPGroundTruthPredictor(
+        #    kernels=kernels,
+        #    kernels_noiseless=kernels_noiseless,
+        #    noise_std=noises_std,
+        #)
+        return None
 
 
 class GPGroundTruthPredictor(GroundTruthPredictor):
@@ -422,6 +438,60 @@ class MixtureGPGroundTruthPredictor(GroundTruthPredictor):
             gt_log_lik = None
 
         return mean, std, gt_log_lik, gt_log_marg_lik
+
+
+class GPCopulaGenerator(RandomScaleGPGenerator):
+    def __init__(
+        self,
+        *,
+        noise_std: float,
+        min_log10_lengthscale: float,
+        max_log10_lengthscale: float,
+        marg_dist: str,
+        **kwargs,
+    ):
+        super().__init__(
+            noise_std=noise_std,
+            min_log10_lengthscale=min_log10_lengthscale,
+            max_log10_lengthscale=max_log10_lengthscale,
+            **kwargs,
+        )
+
+        assert marg_dist in ["Normal", "Cauchy", "Laplace"]
+
+        self.marg_dist = getattr(tfd, marg_dist)(loc=0.0, scale=1.0)
+        self.marg_std = (
+            self.noise_std**2.0 + MARGINAL_VARIANCE[self.kernel_type]
+        ) ** 0.5
+        self.marg_gauss = tfd.Normal(loc=0.0, scale=self.marg_std + 1e-3)
+
+    def sample_outputs(
+        self,
+        seed: Seed,
+        x: tf.Tensor,
+    ) -> Tuple[Seed, tf.Tensor, Callable]:
+        """Sample context and target outputs, given the inputs `x`.
+
+        Arguments:
+            seed: Random seed.
+            x: Tensor of shape (batch_size, num_ctx + num_trg, dim) containing
+                the context and target inputs.
+
+        Returns:
+            seed: Random seed generated by splitting.
+            y: Tensor of shape (batch_size, num_ctx + num_trg, 1) containing
+                the context and target outputs.
+        """
+
+        seed, y, _ = super().sample_outputs(seed, x)
+
+        # Pass through Gaussian CDF
+        y = self.marg_gauss.cdf(y)
+
+        # Pass through marginal distribution inverse CDF
+        y = self.marg_dist.quantile(y)
+
+        return seed, y, None
 
 
 class GPWithPrivateOutputsNonprivateInputs:
