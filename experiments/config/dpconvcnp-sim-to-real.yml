@@ -6,7 +6,8 @@ generators:
     kernel_type: matern32
     min_log10_lengthscale: -0.602
     max_log10_lengthscale: -0.602
-    noise_std: 0.2
+    min_log10_noise_std: null
+    max_log10_noise_std: null
     min_num_ctx: 1
     max_num_ctx: 512
     min_num_trg: 512
@@ -24,9 +25,10 @@ generators:
     seed: ${params.generator_valid_seed}
     dim: ${params.dim}
     kernel_type: matern32
+    min_log10_noise_std: null
+    max_log10_noise_std: null
     min_log10_lengthscale: -0.602
     max_log10_lengthscale: -0.602
-    noise_std: 0.2
     min_num_ctx: 1
     max_num_ctx: 512
     min_num_trg: 512
