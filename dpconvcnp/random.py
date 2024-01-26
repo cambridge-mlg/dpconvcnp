@@ -87,6 +87,38 @@ def randu(
         dtype=minval.dtype,
     )
 
+def randperm(
+    shape: tf.TensorShape,
+    seed: tf.Tensor,
+    maxval: tf.Tensor,
+) -> Tuple[Seed, tf.Tensor]:
+    """Generate random permutations of integers in the range `[0, maxval]`,
+    uniformly distributed, and propagate a new random seed.
+    
+    Arguments:
+        shape: Shape of the output tensor.
+        seed: Random seed for random number generator.
+        maxval: Upper bound of the range of random permutations to generate.
+        dtype: Data type of the output tensor.
+    
+    Returns:
+        seed: New random seed produced by splitting.
+        rand: Random permutations of integers in the range `[0, maxval]`.
+    """
+    
+    assert maxval.dtype in [
+        tf.int32,
+        tf.int64,
+    ], f"Invalid dtype: {maxval.dtype=}"
+
+    seed, next_seed = tf.random.split(seed, num=2)
+    uniform = tf.random.stateless_uniform(
+        shape=shape + (maxval + 1,),
+        seed=seed,
+        dtype=tf.float32,
+    ) 
+    return next_seed, tf.argsort(uniform, axis=-1)
+
 
 def randn(
     shape: tf.TensorShape,
