@@ -12,8 +12,8 @@ generators:
     max_num_ctx: 512
     min_num_trg: 512
     max_num_trg: 512
-    context_range: [[-2.0, 2.0]]
-    target_range: [[-6.0, 6.0]]
+    context_range: [[-1.0, 1.0]]
+    target_range: [[-1.0, 1.0]]
     samples_per_epoch: 32768
     batch_size: 16
     min_epsilon: 3
@@ -33,8 +33,8 @@ generators:
     max_num_ctx: 512
     min_num_trg: 512
     max_num_trg: 512
-    context_range: [[-2.0, 2.0]]
-    target_range: [[-6.0, 6.0]]
+    context_range: [[-1.0, 1.0]]
+    target_range: [[-1.0, 1.0]]
     samples_per_epoch: 2048
     batch_size: 16
     min_epsilon: 3
@@ -55,8 +55,8 @@ dpsetconv:
   points_per_unit: ${params.points_per_unit}
   dim: ${params.dim}
   margin: 2.0
-  xmin: [-7.0]
-  xmax: [7.0]
+  xmin: [-4.0]
+  xmax: [4.0]
   lengthscale_init: 0.1
   y_bound_init: 2.0
   w_noise_init: 0.5
