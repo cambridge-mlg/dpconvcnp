@@ -27,8 +27,8 @@ class HowellGenerator(DataGenerator):
     def __init__(
         self,
         *,
-        min_num_context: int,
-        max_num_context: int,
+        min_num_ctx: int,
+        max_num_ctx: int,
         x_name: str,
         y_name: str,
         reset_seed_at_epoch_end: bool = False,
@@ -43,8 +43,8 @@ class HowellGenerator(DataGenerator):
         self.reset_seed_at_epoch_end = reset_seed_at_epoch_end
 
         # Set dataloader parameters
-        self.min_num_context = to_tensor(min_num_context, i32)
-        self.max_num_context = to_tensor(max_num_context, i32)
+        self.min_num_context = to_tensor(min_num_ctx, i32)
+        self.max_num_context = to_tensor(max_num_ctx, i32)
 
         # Load data fields
         self.data = self.load_full_data()

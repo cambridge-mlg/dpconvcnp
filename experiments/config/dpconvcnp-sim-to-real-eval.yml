@@ -1,0 +1,20 @@
+generator:
+  _target_: dpconvcnp.data.howell.HowellGenerator
+  seed: ${params.generator_seed}
+  min_num_ctx: 1
+  max_num_ctx: 543
+  x_name: age
+  y_name: height
+  samples_per_epoch: 4096
+  batch_size: 16
+  min_epsilon: 1
+  max_epsilon: 1
+  min_log10_delta: -3
+  max_log10_delta: -3
+  reset_seed_at_epoch_end: true
+
+params:
+  dim: 1
+  generator_seed: [0, 100]
+  evaluation_seed: [0, 110]
+  eval_name: null
