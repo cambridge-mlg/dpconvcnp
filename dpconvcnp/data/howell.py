@@ -43,8 +43,8 @@ class HowellGenerator(DataGenerator):
         self.reset_seed_at_epoch_end = reset_seed_at_epoch_end
 
         # Set dataloader parameters
-        self.min_num_context = to_tensor(min_num_ctx, i32)
-        self.max_num_context = to_tensor(max_num_ctx, i32)
+        self.min_num_ctx = to_tensor(min_num_ctx, i32)
+        self.max_num_ctx = to_tensor(max_num_ctx, i32)
 
         # Load data fields
         self.data = self.load_full_data()
@@ -57,7 +57,7 @@ class HowellGenerator(DataGenerator):
         self.num_data = to_tensor(self.x.shape[0], i32)
 
         assert (
-            max_num_context < self.num_data
+            max_num_ctx < self.num_data
         ), "max_num_context must be less than the number of data points"
 
     def load_full_data(self) -> Dict[str, np.array]:
@@ -82,11 +82,11 @@ class HowellGenerator(DataGenerator):
 
     def generate_data(self, seed: Seed) -> Tuple[Seed, Batch]:
         # Sample number of context points
-        seed, num_context = randint(
+        seed, num_ctx = randint(
             seed=seed,
             shape=(),
-            minval=self.min_num_context,
-            maxval=self.max_num_context,
+            minval=self.min_num_ctx,
+            maxval=self.max_num_ctx,
         )
 
         # Set up range of indices for each task
@@ -97,8 +97,8 @@ class HowellGenerator(DataGenerator):
         )
 
         # Split indices into context and target
-        ctx_idx = idx[:, :num_context]
-        trg_idx = idx[:, num_context:]
+        ctx_idx = idx[:, :num_ctx]
+        trg_idx = idx[:, num_ctx:]
 
         # Get tasks for batch
         x_ctx = _select_batch_of_tasks(self.x, ctx_idx)
