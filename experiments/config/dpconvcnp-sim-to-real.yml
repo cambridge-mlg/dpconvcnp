@@ -107,4 +107,4 @@ misc:
 
 plot_options:
   xlim: [-1.05, 1.05]
-  ylim: [-2.00, 2.00]
+  ylim: [-3.50, 3.50]
