@@ -40,7 +40,7 @@ class HowellGenerator(DataGenerator):
 
         super().__init__(**kwargs)
 
-        self.base_seed = seed
+        self.base_seed = self.seed
         self.reset_seed_at_epoch_end = reset_seed_at_epoch_end
 
         # Set dataloader parameters
