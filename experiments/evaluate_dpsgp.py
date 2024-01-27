@@ -104,6 +104,7 @@ def main():
     parser.add_argument("--run_path", type=str)
     parser.add_argument("--evaluation_config", type=str)
     parser.add_argument("--lengthscale", type=float)
+    parser.add_argument("--frequency", type=float)
     parser.add_argument("--epsilon", type=float)
     parser.add_argument("--num_ctx", type=int)
     args, config_changes = parser.parse_known_args()
@@ -127,13 +128,19 @@ def main():
     config = OmegaConf.merge(config, config_changes)
 
     # Assign before instantiation.
-    evaluation_config.generator.min_log10_lengthscale = math.log10(args.lengthscale)
-    evaluation_config.generator.max_log10_lengthscale = math.log10(args.lengthscale)
+    if args.frequency is not None:
+        evaluation_config.generator.min_frequency = args.frequency
+        evaluation_config.generator.max_frequency = args.frequency
+        evaluation_config.params.eval_name = f"frequency-{args.frequency}/eps-{args.epsilon}/log10delta-{evaluation_config.generator.min_log10_delta}/nc-{args.num_ctx}"
+    else:
+        evaluation_config.generator.min_log10_lengthscale = math.log10(args.lengthscale)
+        evaluation_config.generator.max_log10_lengthscale = math.log10(args.lengthscale)
+        evaluation_config.params.eval_name = f"lengthscale-{args.lengthscale}/eps-{args.epsilon}/log10delta-{evaluation_config.generator.min_log10_delta}/nc-{args.num_ctx}"
+
     evaluation_config.generator.min_epsilon = args.epsilon
     evaluation_config.generator.max_epsilon = args.epsilon
     evaluation_config.generator.min_num_ctx = args.num_ctx
     evaluation_config.generator.max_num_ctx = args.num_ctx
-    evaluation_config.params.eval_name = f"lengthscale-{args.lengthscale}/eps-{args.epsilon}/log10delta-{evaluation_config.generator.min_log10_delta}/nc-{args.num_ctx}"
     evaluation = instantiate(evaluation_config)
 
     # Set lengthscale, epsilon and num_ctx of the generator.
@@ -144,6 +151,15 @@ def main():
     # Load best parameters from wandb run.
     best_params = run.summary.best_params
     params = argparse.Namespace(**best_params)
+
+    # Set kernel kwargs.
+    params.kernel_kwargs = {
+        "init_lengthscale": params.init_lengthscale,
+        "init_scale": params.init_scale,
+    }
+    if "init_period" in best_params:
+        params.kernel_kwargs["init_period"] = params.init_period
+
     params.kernel = instantiate(run.config["kernel"])
 
     plot(

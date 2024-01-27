@@ -1,0 +1,48 @@
+generators:
+  train:
+    _target_: dpconvcnp.data.gp.RandomScaleGPGenerator
+    seed: ${params.generator_train_seed}
+    dim: ${params.dim}
+    kernel_type: eq
+    min_log10_lengthscale: -0.699
+    max_log10_lengthscale: 0.398
+    noise_std: 0.2
+    min_num_ctx: 1
+    max_num_ctx: 512
+    min_num_trg: 512
+    max_num_trg: 512
+    context_range: [[-2.0, 2.0]]
+    target_range: [[-6.0, 6.0]]
+    samples_per_epoch: 64
+    batch_size: 1
+    min_epsilon: 0.9
+    max_epsilon: 10
+    min_log10_delta: -3
+    max_log10_delta: -3
+
+params:
+  dim: 1
+  generator_train_seed: [0, 0]
+  generator_valid_seed: [0, 10]
+  training_seed: [0, 40]
+  validation_seed: [0, 50]
+  kernel_kwargs:
+    init_scale: 1.0
+    init_lengthscale: 1.0
+  num_inducing: 10
+  init_noise: 0.1
+  epochs: 1
+  batch_size: 100
+  max_grad_norm: 5.0
+  lr: 1e-1
+  kernel: 
+    _target_: dpsgp.kernels.RBFKernel
+    _partial_: True
+  
+
+misc:
+  results_root: _experiments
+  project: dpsgp-time
+  name: epochs-1
+  experiment_name: null
+  logging: True
