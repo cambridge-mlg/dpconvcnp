@@ -472,6 +472,7 @@ def initialize_evaluation(
         experiment_path,
         args.evaluation_dirname,
         evaluation.params.eval_name,
+        evaluation.plot_options if hasattr(evaluation, "plot_options") else {},
     )
 
 

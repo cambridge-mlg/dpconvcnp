@@ -10,6 +10,7 @@ def main():
         experiment_path,
         eval_dirname,
         eval_name,
+        plot_options,
     ) = initialize_evaluation()
 
     seed = base_seed
@@ -24,6 +25,7 @@ def main():
         model=model,
         seed=base_seed,
         batches=batches,
+        plot_options=plot_options,
     )
 
     evaluation_summary(

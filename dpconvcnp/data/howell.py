@@ -9,10 +9,15 @@ from dpconvcnp.random import Seed, randperm, randint, to_tensor
 from dpconvcnp.utils import f32, i32
 
 
-def _normalise(x: tf.Tensor) -> tf.Tensor:
+def _scale(x: tf.Tensor) -> tf.Tensor:
     return (
         2.0 * (x - tf.reduce_min(x)) / (tf.reduce_max(x) - tf.reduce_min(x))
         - 1.0
+    )
+    
+def _normalise(x: tf.Tensor) -> tf.Tensor:
+    return (
+        (x - tf.reduce_mean(x)) / (tf.math.reduce_std(x))
     )
 
 def _select_batch_of_tasks(tensor: tf.Tensor, idx: tf.Tensor) -> tf.Tensor:
@@ -53,8 +58,8 @@ class HowellGenerator(DataGenerator):
         # Set task parameters
         self.x_name = x_name
         self.y_name = y_name
-        self.x = to_tensor(self.data[x_name], f32)
-        self.y = to_tensor(self.data[y_name], f32)
+        self.x = _scale(to_tensor(self.data[x_name], f32))
+        self.y = 1.5 * _normalise(to_tensor(self.data[y_name], f32))
         self.num_data = to_tensor(self.x.shape[0], i32)
 
         assert (
@@ -70,7 +75,7 @@ class HowellGenerator(DataGenerator):
                 data[k].append(datapoint[k][None])
 
         for k, v in data.items():
-            data[k] = _normalise(tf.concat(v, axis=0))
+            data[k] = tf.concat(v, axis=0)
 
         return data
 
@@ -102,10 +107,10 @@ class HowellGenerator(DataGenerator):
         trg_idx = idx[:, num_ctx:]
 
         # Get tasks for batch
-        x_ctx = _select_batch_of_tasks(self.x, ctx_idx)
-        y_ctx = _select_batch_of_tasks(self.y, ctx_idx)
-        x_trg = _select_batch_of_tasks(self.x, trg_idx)
-        y_trg = _select_batch_of_tasks(self.y, trg_idx)
+        x_ctx = _select_batch_of_tasks(self.x, ctx_idx)[:, :, None]
+        y_ctx = _select_batch_of_tasks(self.y, ctx_idx)[:, :, None]
+        x_trg = _select_batch_of_tasks(self.x, trg_idx)[:, :, None]
+        y_trg = _select_batch_of_tasks(self.y, trg_idx)[:, :, None]
 
         return seed, Batch(
             x=self.x,

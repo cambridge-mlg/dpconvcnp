@@ -1,4 +1,4 @@
-from typing import Tuple, List
+from typing import Optional, Dict, Tuple, List
 import os
 
 import numpy as np
@@ -29,6 +29,7 @@ def plot(
     x_range: Tuple[float, float] = (-7.0, 7.0),
     y_lim: Tuple[float, float] = (-3.0, 3.0),
     points_per_dim: int = 128,
+    plot_options: Optional[Dict] = None,
 ):
     # Get dimension of input data
     dim = batches[0].x_ctx.shape[-1]
@@ -123,8 +124,8 @@ def plot(
                 )
 
             # Set axis limits
-            plt.xlim(x_range)
-            plt.ylim(y_lim)
+            plt.xlim(plot_options.xlim if "xlim" in plot_options else x_range)
+            plt.ylim(plot_options.ylim if "ylim" in plot_options else y_lim)
 
             # Set title
             info = get_batch_info(batches[i], 0)
