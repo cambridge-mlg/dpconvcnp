@@ -37,8 +37,8 @@ def plot(
 
     if dim == 1:
         x_plot = np.linspace(
-            plot_options.x_range[0],
-            plot_options.x_range[1],
+            plot_options.xlim[0],
+            plot_options.xlim[1],
             points_per_dim,
         )[None, :, None]
         x_plot = to_tensor(x_plot, f32)
@@ -149,8 +149,8 @@ def plot(
 
     else:
         x_plot = np.linspace(
-            plot_options.x_range[0] - 1e-1,
-            plot_options.x_range[1] + 1e-1,
+            plot_options.xlim[0] - 1e-1,
+            plot_options.xlim[1] + 1e-1,
             points_per_dim,
         )
         x_plot = np.stack(np.meshgrid(x_plot, x_plot), axis=-1)[None, ...]
@@ -197,8 +197,8 @@ def plot(
                 vmax=1.0,
             )
 
-            plt.xlim(plot_options.x_range)
-            plt.ylim(plot_options.x_range)
+            plt.xlim(plot_options.xlim)
+            plt.ylim(plot_options.xlim)
 
             _, mean, std = model(
                 seed=seed,
