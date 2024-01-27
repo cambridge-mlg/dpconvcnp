@@ -26,3 +26,7 @@ params:
   generator_seed: [0, 100]
   evaluation_seed: [0, 110]
   eval_name: null
+
+plot_options:
+  xlim: [-7.00, 7.00]
+  ylim: [-3.00, 3.00]

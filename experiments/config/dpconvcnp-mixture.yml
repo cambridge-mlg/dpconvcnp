@@ -106,3 +106,7 @@ params:
 misc:
   results_root: _experiments
   experiment_name: null
+
+plot_options:
+  xlim: [-7.00, 7.00]
+  ylim: [-3.00, 3.00]

@@ -26,8 +26,6 @@ def plot(
     epoch: int = 0,
     num_fig: int = 5,
     figsize: Tuple[float, float] = (8.0, 6.0),
-    x_range: Tuple[float, float] = (-7.0, 7.0),
-    y_lim: Tuple[float, float] = (-3.0, 3.0),
     points_per_dim: int = 128,
     plot_options: Optional[Dict] = None,
 ):
@@ -38,9 +36,11 @@ def plot(
     os.makedirs(f"{path}/fig", exist_ok=True)
 
     if dim == 1:
-        x_plot = np.linspace(x_range[0], x_range[1], points_per_dim)[
-            None, :, None
-        ]
+        x_plot = np.linspace(
+            plot_options.x_range[0],
+            plot_options.x_range[1],
+            points_per_dim,
+        )[None, :, None]
         x_plot = to_tensor(x_plot, f32)
 
         for i in range(num_fig):
@@ -90,9 +90,7 @@ def plot(
                 label="Model",
             )
 
-
             if batches[i].gt_pred is not None:
-
                 # Use ground truth to make predictions at x_plot
                 gt_mean, gt_std, _, _ = batches[i].gt_pred(
                     x_ctx=batches[i].x_ctx[:1],
@@ -124,8 +122,8 @@ def plot(
                 )
 
             # Set axis limits
-            plt.xlim(plot_options.xlim if "xlim" in plot_options else x_range)
-            plt.ylim(plot_options.ylim if "ylim" in plot_options else y_lim)
+            plt.xlim(plot_options.xlim)
+            plt.ylim(plot_options.ylim)
 
             # Set title
             info = get_batch_info(batches[i], 0)
@@ -151,7 +149,9 @@ def plot(
 
     else:
         x_plot = np.linspace(
-            x_range[0] - 1e-1, x_range[1] + 1e-1, points_per_dim
+            plot_options.x_range[0] - 1e-1,
+            plot_options.x_range[1] + 1e-1,
+            points_per_dim,
         )
         x_plot = np.stack(np.meshgrid(x_plot, x_plot), axis=-1)[None, ...]
 
@@ -197,8 +197,8 @@ def plot(
                 vmax=1.0,
             )
 
-            plt.xlim(x_range)
-            plt.ylim(x_range)
+            plt.xlim(plot_options.x_range)
+            plt.ylim(plot_options.x_range)
 
             _, mean, std = model(
                 seed=seed,
