@@ -50,7 +50,7 @@ def main():
             seed=plot_seed,
             epoch=epoch,
             batches=batches,
-            plot_options=experiment.params.plot_options,
+            plot_options=experiment.plot_options,
         )
 
 
