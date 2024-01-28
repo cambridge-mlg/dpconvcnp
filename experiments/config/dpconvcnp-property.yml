@@ -8,16 +8,18 @@ generators:
     min_log10_delta: -3
     max_log10_delta: -3
     path_to_csv: /scratches/cblgpu07/em626/dpconvcnp/_data/processed/all.csv
-    num_ctx: 512
-    num_trg: 512
+    min_num_ctx: 1
+    max_num_ctx: 1
+    min_num_trg: 512
+    max_num_trg: 512
     mode: train
     valid_fraction: 0.1
     test_fraction: 0.1
     property_types: ["T"]
     lease_types: ["F", "L"]
     age_types: ["Y", "N"]
-    min_coords: [-0.582550, 51.236282] # null # Set to [-0.582550, 51.236282] for London only
-    max_coords: [0.3210750, 51.740789] # null # Set to [0.3210750, 51.740789] for London only
+    min_coords: [-0.582550, 51.236282] # London only. Set to null for all data
+    max_coords: [0.3210750, 51.740789] # London only. Set to null for all data
   valid:
     _target_: dpconvcnp.data.property.PropertyPriceDataGenerator
     seed: ${params.generator_train_seed}
@@ -27,16 +29,18 @@ generators:
     min_log10_delta: -3
     max_log10_delta: -3
     path_to_csv: /scratches/cblgpu07/em626/dpconvcnp/_data/processed/all.csv
-    num_ctx: 512
-    num_trg: 64
+    min_num_ctx: 1
+    max_num_ctx: 1
+    min_num_trg: 512
+    max_num_trg: 512
     mode: valid
     valid_fraction: 0.1
     test_fraction: 0.1
     property_types: ["T"]
     lease_types: ["F", "L"]
     age_types: ["Y", "N"]
-    min_coords: [-0.582550, 51.236282] # null # Set to [-0.582550, 51.236282] for London only
-    max_coords: [0.3210750, 51.740789] # null # Set to [0.3210750, 51.740789] for London only
+    min_coords: [-0.582550, 51.236282] # London only. Set to null for all data
+    max_coords: [0.3210750, 51.740789] # London only. Set to null for all data
     reset_seed_at_epoch_end: true
 
 model:
@@ -60,16 +64,16 @@ dpsetconv:
   amortize_y_bound: true
   amortize_w_noise: true
   num_mlp_hidden_units: 32
-  xmin: [-1.0, -1.0]
-  xmax: [ 1.0,  1.0]
+  xmin: [-1.2, -1.2]
+  xmax: [ 1.2,  1.2]
 
 conv_net:
   _target_: dpconvcnp.model.conv.UNet
   first_channels: 16
   last_channels: 2
   kernel_size: 5
-  num_channels: [32, 32, 32, 32, 32]
-  strides: [2, 2, 2, 2, 2]
+  num_channels: [256, 256, 256, 256, 256, 256, 256]
+  strides: [2, 2, 2, 2, 2, 2]
   dim: 2
   seed: ${params.architecture_seed}
 

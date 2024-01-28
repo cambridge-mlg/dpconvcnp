@@ -7,7 +7,7 @@ import pandas as pd
 
 from dpconvcnp.data.data import Batch, DataGenerator
 from dpconvcnp.random import Seed, randint, to_tensor
-from dpconvcnp.utils import f32
+from dpconvcnp.utils import f32, i32
 
 
 class PropertyPriceDataGenerator(DataGenerator):
@@ -15,8 +15,10 @@ class PropertyPriceDataGenerator(DataGenerator):
         self,
         *,
         path_to_csv: str,
-        num_ctx: int,
-        num_trg: int,
+        min_num_ctx: int,
+        max_num_ctx: int,
+        min_num_trg: int,
+        max_num_trg: int,
         mode: Literal["train", "valid", "test"],
         valid_fraction: float = 0.1,
         test_fraction: float = 0.1,
@@ -37,8 +39,10 @@ class PropertyPriceDataGenerator(DataGenerator):
         self.max_coords = max_coords
         self.valid_fraction = valid_fraction
         self.test_fraction = test_fraction
-        self.num_ctx = num_ctx
-        self.num_trg = num_trg
+        self.min_num_ctx = min_num_ctx
+        self.max_num_ctx = max_num_ctx
+        self.min_num_trg = min_num_trg
+        self.max_num_trg = max_num_trg
 
         # Read data csv
         dataframe = pd.read_csv(path_to_csv)
@@ -54,7 +58,7 @@ class PropertyPriceDataGenerator(DataGenerator):
 
         # Compute samples per epoch and remove any excess rows
         B = kwargs["batch_size"]
-        self.task_size = num_ctx + num_trg
+        self.task_size = max_num_ctx + max_num_trg
         dataframe = dataframe[
             : (dataframe.shape[0] // (B * self.task_size)) * B * self.task_size
         ]
@@ -157,6 +161,26 @@ class PropertyPriceDataGenerator(DataGenerator):
             maxval=int(1e6) * (self.task_size - 1),
         )
 
+        # Sample number of context points
+        seed, num_ctx = randint(
+            seed=seed,
+            shape=(),
+            minval=to_tensor(self.min_num_ctx, i32),
+            maxval=to_tensor(self.max_num_ctx, i32),
+        )
+        
+        # Sample number of target points
+        seed, num_trg = randint(
+            seed=seed,
+            shape=(),
+            minval=to_tensor(self.min_num_ctx, i32),
+            maxval=to_tensor(self.max_num_ctx, i32),
+        )
+
+        # Convert tf tensors to python integers
+        num_ctx = int(num_ctx.numpy())
+        num_trg = int(num_trg.numpy())
+
         shuffle_idx = shuffle_idx.numpy()
         shuffle_idx = np.argsort(shuffle_idx, axis=1)
 
@@ -173,10 +197,10 @@ class PropertyPriceDataGenerator(DataGenerator):
         x = to_tensor(np.stack([lon, lat], axis=-1), f32)
         y = to_tensor(price, f32)[:, :, None]
 
-        x_ctx = x[:, : self.num_ctx, :]
-        y_ctx = y[:, : self.num_ctx, :]
-        x_trg = x[:, self.num_ctx :, :]
-        y_trg = y[:, self.num_ctx :, :]
+        x_ctx = x[:, : num_ctx, :]
+        y_ctx = y[:, : num_ctx, :]
+        x_trg = x[:, num_ctx : num_ctx + num_trg, :]
+        y_trg = y[:, num_ctx : num_ctx + num_trg, :]
 
         y_ctx_mean = tf.reduce_mean(y_ctx, axis=1, keepdims=True)
         y_ctx = y_ctx - y_ctx_mean
