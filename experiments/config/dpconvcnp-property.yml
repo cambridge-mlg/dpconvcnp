@@ -72,7 +72,7 @@ conv_net:
   first_channels: 16
   last_channels: 2
   kernel_size: 5
-  num_channels: [256, 256, 256, 256, 256, 256, 256]
+  num_channels: [256, 256, 256, 256, 256, 256]
   stride: 2
   dim: 2
   seed: ${params.architecture_seed}
