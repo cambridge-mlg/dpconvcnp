@@ -56,6 +56,8 @@ def main():
             xc,
             yc,
             experiment.limits,
+            config["generators"]["train"]["context_range"][0][0],
+            config["generators"]["train"]["context_range"][0][1],
             experiment.kernel,
         ),
         n_trials=experiment.params.n_trials,

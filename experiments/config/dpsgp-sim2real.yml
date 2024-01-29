@@ -3,20 +3,25 @@ generators:
     _target_: dpconvcnp.data.gp.RandomScaleGPGenerator
     seed: ${params.generator_train_seed}
     dim: ${params.dim}
-    kernel_type: eq
-    min_log10_lengthscale: -0.699
-    max_log10_lengthscale: 0.398
-    noise_std: 0.2
+    kernel_type: matern32
+    min_log10_lengthscale: -0.3010299956639812
+    max_log10_lengthscale: 0.3010299956639812
+    min_log10_noise_std: -0.6989700043360187
+    max_log10_noise_std: -0.22184874961635637
     min_num_ctx: 1
     max_num_ctx: 512
     min_num_trg: 512
     max_num_trg: 512
-    context_range: [[-2.0, 2.0]]
-    target_range: [[-6.0, 6.0]]
+    context_range:
+    -   - -1.0
+        - 1.0
+    target_range:
+    -   - -1.0
+        - 1.0
     samples_per_epoch: 64
     batch_size: 1
     min_epsilon: 0.9
-    max_epsilon: 10
+    max_epsilon: 4.0
     min_log10_delta: -3
     max_log10_delta: -3
 
@@ -32,7 +37,7 @@ limits:
   min_max_grad_norm: 5.0
   max_max_grad_norm: 20.0
   min_init_lengthscale: 0.1
-  max_init_lengthscale: 0.5
+  max_init_lengthscale: 2.0
   min_init_scale: 0.5
   max_init_scale: 2.0
   min_init_noise: 0.05
@@ -47,12 +52,13 @@ params:
   n_trials: 200
 
 kernel: 
-  _target_: dpsgp.kernels.RBFKernel
+  _target_: dpsgp.kernels.MaternKernel
   _partial_: True
-  
+  nu: 1.5
+
 misc:
   results_root: _experiments
-  project: dpsgp-time
-  name: epochs-1
+  project: dp-sgp
+  name: sim2real
   experiment_name: null
   logging: True
