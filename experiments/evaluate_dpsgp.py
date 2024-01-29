@@ -131,11 +131,11 @@ def main():
     if args.frequency is not None:
         evaluation_config.generator.min_frequency = args.frequency
         evaluation_config.generator.max_frequency = args.frequency
-        evaluation_config.params.eval_name = f"frequency-{args.frequency}/eps-{args.epsilon}/log10delta-{evaluation_config.generator.min_log10_delta}/nc-{args.num_ctx}"
+        evaluation_config.misc.eval_name += f"/frequency-{args.frequency}/eps-{args.epsilon}/log10delta-{evaluation_config.generator.min_log10_delta}/nc-{args.num_ctx}"
     else:
         evaluation_config.generator.min_log10_lengthscale = math.log10(args.lengthscale)
         evaluation_config.generator.max_log10_lengthscale = math.log10(args.lengthscale)
-        evaluation_config.params.eval_name = f"lengthscale-{args.lengthscale}/eps-{args.epsilon}/log10delta-{evaluation_config.generator.min_log10_delta}/nc-{args.num_ctx}"
+        evaluation_config.misc.eval_name += f"/lengthscale-{args.lengthscale}/eps-{args.epsilon}/log10delta-{evaluation_config.generator.min_log10_delta}/nc-{args.num_ctx}"
 
     evaluation_config.generator.min_epsilon = args.epsilon
     evaluation_config.generator.max_epsilon = args.epsilon
@@ -168,7 +168,7 @@ def main():
         batches=batches,
         params=params,
         num_fig=5,
-        name=f"eval/{evaluation.params.eval_name}",
+        name=f"eval/{evaluation.misc.eval_name}",
     )
 
     result = validate_dpsgp(generator, params)
@@ -180,13 +180,11 @@ def main():
 
     # Log summary of evaluation.
     for k in result.keys():
-        wandb.run.summary[f"eval/{evaluation.params.eval_name}/mean_{k}"] = result[
+        wandb.run.summary[f"eval/{evaluation.misc.eval_name}/mean_{k}"] = result[
             k
         ].mean()
-        wandb.run.summary[f"eval/{evaluation.params.eval_name}/std_{k}"] = result[
-            k
-        ].std()
-        wandb.run.summary[f"eval/{evaluation.params.eval_name}/ste_{k}"] = result[
+        wandb.run.summary[f"eval/{evaluation.misc.eval_name}/std_{k}"] = result[k].std()
+        wandb.run.summary[f"eval/{evaluation.misc.eval_name}/ste_{k}"] = result[
             k
         ].std() / (len(result[k]) ** 0.5)
 
