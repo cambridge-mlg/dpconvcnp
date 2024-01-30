@@ -8,8 +8,8 @@ generators:
     min_log10_delta: -3
     max_log10_delta: -3
     path_to_csv: /scratches/cblgpu07/em626/dpconvcnp/_data/processed/all.csv
-    min_num_ctx: 1
-    max_num_ctx: 1
+    min_num_ctx: 512
+    max_num_ctx: 512
     min_num_trg: 512
     max_num_trg: 512
     mode: train
@@ -29,8 +29,8 @@ generators:
     min_log10_delta: -3
     max_log10_delta: -3
     path_to_csv: /scratches/cblgpu07/em626/dpconvcnp/_data/processed/all.csv
-    min_num_ctx: 1
-    max_num_ctx: 1
+    min_num_ctx: 512
+    max_num_ctx: 512
     min_num_trg: 512
     max_num_trg: 512
     mode: valid
@@ -72,7 +72,7 @@ conv_net:
   first_channels: 16
   last_channels: 2
   kernel_size: 5
-  num_channels: [256, 256, 256, 256, 256, 256]
+  num_channels: [256, 256, 256, 256, 256]
   stride: 2
   dim: 2
   seed: ${params.architecture_seed}
