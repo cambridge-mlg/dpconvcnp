@@ -136,7 +136,7 @@ def plot(
                 f"$N = {info['n']}$   "
                 f"{ell_str}"
                 f"$\\epsilon$ = {info['epsilon']:.2f}  "
-                f"$\\delta$ = {info['delta']:.3f}",
+                f"$\\delta$ = {info['delta']:.5f}",
                 fontsize=24,
             )
 
